@@ -103,14 +103,12 @@ impl HookResult {
     /// Get the block reason if blocking
     pub fn block_reason(&self) -> Option<String> {
         if self.exit_code == 2 {
+            let trimmed = self.stderr.trim();
             Some(
-                self.stderr
-                    .trim()
-                    .to_string()
+                trimmed
                     .split_once('\n')
-                    .map(|(first, _)| first)
-                    .unwrap_or(&self.stderr)
-                    .to_string(),
+                    .map(|(first, _)| first.to_string())
+                    .unwrap_or_else(|| trimmed.to_string()),
             )
         } else {
             self.parsed_output
