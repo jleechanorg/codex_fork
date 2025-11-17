@@ -11,6 +11,6 @@ pub mod settings;
 pub mod slash_commands;
 
 pub use error::{ExtensionError, Result};
-pub use hooks::HookSystem;
+pub use hooks::{HookEvent, HookInput, HookResult, HookSystem};
 pub use settings::Settings;
 pub use slash_commands::SlashCommandRegistry;

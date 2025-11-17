@@ -33,7 +33,7 @@ use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use serde_json::Value;
 use std::io::IsTerminal;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use supports_color::Stream;
 use tracing::debug;
 use tracing::error;
@@ -113,6 +113,18 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
             buffer
         }
     };
+
+    // Slash command detection and substitution
+    let prompt = match detect_and_substitute_slash_command(&prompt, cwd.as_deref()) {
+        Ok(substituted) => substituted,
+        Err(e) => {
+            tracing::warn!("Slash command detection failed: {}", e);
+            prompt // Fall back to original prompt if detection fails
+        }
+    };
+
+    // Execute UserPromptSubmit hooks
+    let prompt = execute_user_prompt_submit_hook(&prompt, cwd.as_deref()).await?;
 
     let output_schema = load_output_schema(output_schema_path);
 
@@ -398,6 +410,129 @@ async fn resolve_resume_path(
         Ok(path)
     } else {
         Ok(None)
+    }
+}
+
+/// Executes UserPromptSubmit hooks and applies any modifications to the prompt.
+async fn execute_user_prompt_submit_hook(
+    prompt: &str,
+    cwd: Option<&Path>,
+) -> anyhow::Result<String> {
+    use codex_extensions::{HookEvent, HookInput, HookSystem, Settings};
+
+    // Determine project directory
+    let current_dir_fallback = std::env::current_dir().ok();
+    let project_dir = cwd.or_else(|| current_dir_fallback.as_deref());
+
+    // Load settings to check if hooks are configured
+    let settings = match Settings::load(project_dir) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::debug!("No hook settings found: {}", e);
+            return Ok(prompt.to_string());
+        }
+    };
+
+    // Check if UserPromptSubmit hooks are configured
+    if !settings.hooks.contains_key("UserPromptSubmit") {
+        return Ok(prompt.to_string());
+    }
+
+    // Create hook system and execute hooks
+    let hook_system = HookSystem::new(project_dir)?;
+
+    let mut extra = std::collections::HashMap::new();
+    extra.insert(
+        "prompt".to_string(),
+        serde_json::Value::String(prompt.to_string()),
+    );
+
+    let input = HookInput {
+        session_id: std::env::var("CODEX_SESSION_ID")
+            .unwrap_or_else(|_| format!("exec-{}", std::process::id())),
+        transcript_path: String::new(), // Not available in exec mode
+        cwd: project_dir
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| ".".to_string()),
+        hook_event_name: "UserPromptSubmit".to_string(),
+        extra,
+    };
+
+    let results = hook_system
+        .execute(HookEvent::UserPromptSubmit, input)
+        .await?;
+
+    // Check for blocking hooks
+    for result in &results {
+        if result.is_blocking() {
+            let reason = result
+                .block_reason()
+                .unwrap_or_else(|| "Hook blocked execution".to_string());
+            eprintln!("Hook blocked execution: {}", reason);
+            std::process::exit(1);
+        }
+    }
+
+    // Use the stdout from the last hook as the modified prompt if it's non-empty JSON
+    // Otherwise use the original prompt
+    let modified_prompt = results
+        .last()
+        .and_then(|r| {
+            if !r.stdout.trim().is_empty() {
+                // Try to parse as JSON first
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&r.stdout) {
+                    // Check if there's a modified prompt in the JSON
+                    json.get("prompt")
+                        .and_then(|p| p.as_str())
+                        .map(|s| s.to_string())
+                        .or_else(|| Some(r.stdout.clone()))
+                } else {
+                    // If not JSON, use stdout directly
+                    Some(r.stdout.clone())
+                }
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| prompt.to_string());
+
+    Ok(modified_prompt)
+}
+
+/// Detects slash commands in the prompt and substitutes them with their content.
+fn detect_and_substitute_slash_command(
+    prompt: &str,
+    cwd: Option<&Path>,
+) -> anyhow::Result<String> {
+    use codex_extensions::SlashCommandRegistry;
+
+    // Check if this looks like a slash command
+    if let Some((cmd_name, args)) = SlashCommandRegistry::detect_command(prompt) {
+        tracing::info!("Detected slash command: /{} with args: '{}'", cmd_name, args);
+
+        // Determine project directory (cwd or current dir)
+        let current_dir_fallback = std::env::current_dir().ok();
+        let project_dir = cwd.or_else(|| current_dir_fallback.as_deref());
+
+        // Load slash commands from .claude/.codexplus directories
+        let registry = SlashCommandRegistry::load(project_dir)?;
+
+        // Try to get the command
+        if let Some(command) = registry.get(&cmd_name) {
+            let substituted = command.substitute_arguments(&args);
+            tracing::info!(
+                "Substituted slash command /{} (from {})",
+                cmd_name,
+                command.file_path.display()
+            );
+            Ok(substituted)
+        } else {
+            tracing::warn!("Slash command /{} not found in registry", cmd_name);
+            Ok(prompt.to_string()) // Return original if command not found
+        }
+    } else {
+        // Not a slash command, return original
+        Ok(prompt.to_string())
     }
 }
 
