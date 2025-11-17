@@ -1,9 +1,10 @@
----
-name: add-header
-type: post-output
-priority: 50
-enabled: true
----
+#!/usr/bin/env python3
+"""
+Hook: add-header
+Type: post-output
+Priority: 50
+Enabled: true
+"""
 from codex_plus.hooks import Hook
 from fastapi.responses import Response
 

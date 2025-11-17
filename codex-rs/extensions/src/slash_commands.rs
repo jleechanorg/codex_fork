@@ -4,7 +4,6 @@
 //! Commands are stored in .claude/commands/ or .codexplus/commands/ directories.
 
 use crate::error::{ExtensionError, Result};
-use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

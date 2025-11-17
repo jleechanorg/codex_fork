@@ -4,7 +4,7 @@
 //! Hooks communicate via JSON stdin/stdout protocol.
 
 use crate::error::{ExtensionError, Result};
-use crate::settings::{HookEntry, Settings};
+use crate::settings::Settings;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -153,8 +153,13 @@ impl HookSystem {
         };
 
         let mut results = Vec::new();
+        let mut blocked = false;
 
         for entry in hooks {
+            if blocked {
+                break;
+            }
+
             for hook_config in &entry.hooks {
                 if hook_config.hook_type != "command" {
                     continue;
@@ -168,6 +173,7 @@ impl HookSystem {
 
                 // Stop on first blocking hook
                 if result.is_blocking() {
+                    blocked = true;
                     break;
                 }
             }

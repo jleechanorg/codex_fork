@@ -1,11 +1,10 @@
 ---
 name: history
 description: View command history
----
-description: /history Command
 type: llm-orchestration
 execution_mode: immediate
 ---
+
 ## ⚡ EXECUTION INSTRUCTIONS FOR CLAUDE
 **When this command is invoked, YOU (Claude) must execute these steps immediately:**
 **This is NOT documentation - these are COMMANDS to execute right now.**

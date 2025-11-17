@@ -8,7 +8,7 @@
 use crate::error::{ExtensionError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Hook configuration from settings.json
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
