@@ -5,8 +5,10 @@
 //! 2. .claude/settings.json (project level)
 //! 3. ~/.claude/settings.json (user level)
 
-use crate::error::{ExtensionError, Result};
-use serde::{Deserialize, Serialize};
+use crate::error::ExtensionError;
+use crate::error::Result;
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
 

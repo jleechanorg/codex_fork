@@ -3,10 +3,13 @@
 //! Parses and manages slash commands from markdown files with YAML frontmatter.
 //! Commands are stored in .claude/commands/ or .codexplus/commands/ directories.
 
-use crate::error::{ExtensionError, Result};
-use serde::{Deserialize, Serialize};
+use crate::error::ExtensionError;
+use crate::error::Result;
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 /// Command metadata from YAML frontmatter
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

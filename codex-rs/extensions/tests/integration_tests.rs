@@ -5,7 +5,9 @@
 //! - End-to-end slash command detection and execution
 //! - Hook execution in realistic scenarios
 
-use codex_extensions::{HookSystem, Settings, SlashCommandRegistry};
+use codex_extensions::HookSystem;
+use codex_extensions::Settings;
+use codex_extensions::SlashCommandRegistry;
 use tempfile::TempDir;
 
 #[test]

@@ -3,11 +3,14 @@
 //! Executes hook scripts at specific points in the Codex CLI lifecycle.
 //! Hooks communicate via JSON stdin/stdout protocol.
 
-use crate::error::{ExtensionError, Result};
+use crate::error::ExtensionError;
+use crate::error::Result;
 use crate::settings::Settings;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::process::Stdio;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;

@@ -2,10 +2,11 @@
 //!
 //! Run with: cargo run --example demo
 
-use codex_extensions::{
-    HookSystem, Settings, SlashCommandRegistry,
-    hooks::{HookEvent, HookInput},
-};
+use codex_extensions::HookSystem;
+use codex_extensions::Settings;
+use codex_extensions::SlashCommandRegistry;
+use codex_extensions::hooks::HookEvent;
+use codex_extensions::hooks::HookInput;
 use std::collections::HashMap;
 
 #[tokio::main]
