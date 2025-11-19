@@ -1207,11 +1207,7 @@ dependencies = [
 name = "codex-extensions"
 version = "0.0.0"
 dependencies = [
- "anyhow",
- "codex-common",
  "dirs",
- "pretty_assertions",
- "pulldown-cmark",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -1476,7 +1472,6 @@ dependencies = [
  "codex-arg0",
  "codex-common",
  "codex-core",
- "codex-extensions",
  "codex-feedback",
  "codex-file-search",
  "codex-login",

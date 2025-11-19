@@ -4,11 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-# Internal dependencies
-codex-common = { workspace = true }
-
 # External dependencies
-anyhow = { workspace = true }
 dirs = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -16,9 +12,7 @@ serde_yaml = "0.9"
 tokio = { workspace = true, features = ["process", "time", "fs"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-pulldown-cmark = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["test-util", "macros", "rt"] }
-pretty_assertions = { workspace = true }

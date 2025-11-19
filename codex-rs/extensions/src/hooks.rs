@@ -242,7 +242,9 @@ impl HookSystem {
         // Read stdout and stderr
         let stdout = if let Some(mut handle) = stdout_handle {
             let mut buf = Vec::new();
-            tokio::io::AsyncReadExt::read_to_end(&mut handle, &mut buf).await.ok();
+            tokio::io::AsyncReadExt::read_to_end(&mut handle, &mut buf)
+                .await
+                .ok();
             String::from_utf8_lossy(&buf).to_string()
         } else {
             String::new()
@@ -250,7 +252,9 @@ impl HookSystem {
 
         let stderr = if let Some(mut handle) = stderr_handle {
             let mut buf = Vec::new();
-            tokio::io::AsyncReadExt::read_to_end(&mut handle, &mut buf).await.ok();
+            tokio::io::AsyncReadExt::read_to_end(&mut handle, &mut buf)
+                .await
+                .ok();
             String::from_utf8_lossy(&buf).to_string()
         } else {
             String::new()
@@ -310,7 +314,9 @@ impl HookSystem {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            if path.exists() && let Ok(metadata) = std::fs::metadata(path) {
+            if path.exists()
+                && let Ok(metadata) = std::fs::metadata(path)
+            {
                 let permissions = metadata.permissions();
                 if permissions.mode() & 0o111 != 0 {
                     // Is executable
