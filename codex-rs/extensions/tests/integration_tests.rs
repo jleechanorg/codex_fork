@@ -6,7 +6,6 @@
 //! - Hook execution in realistic scenarios
 
 use codex_extensions::{HookSystem, Settings, SlashCommandRegistry};
-use std::io::Write;
 use tempfile::TempDir;
 
 #[test]

@@ -40,7 +40,7 @@ impl HookEvent {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "UserPromptSubmit" => Some(HookEvent::UserPromptSubmit),
             "PreToolUse" => Some(HookEvent::PreToolUse),
@@ -120,6 +120,7 @@ impl HookResult {
 #[derive(Debug)]
 pub struct HookSystem {
     settings: Settings,
+    #[allow(dead_code)]
     session_id: String,
     project_dir: PathBuf,
 }
@@ -309,13 +310,11 @@ impl HookSystem {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            if path.exists() {
-                if let Ok(metadata) = std::fs::metadata(path) {
-                    let permissions = metadata.permissions();
-                    if permissions.mode() & 0o111 != 0 {
-                        // Is executable
-                        return (path_str, vec![]);
-                    }
+            if path.exists() && let Ok(metadata) = std::fs::metadata(path) {
+                let permissions = metadata.permissions();
+                if permissions.mode() & 0o111 != 0 {
+                    // Is executable
+                    return (path_str, vec![]);
                 }
             }
         }
@@ -338,17 +337,16 @@ impl HookSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
     use tempfile::TempDir;
 
     #[test]
     fn test_hook_event_conversion() {
         assert_eq!(HookEvent::UserPromptSubmit.as_str(), "UserPromptSubmit");
         assert_eq!(
-            HookEvent::from_str("UserPromptSubmit"),
+            HookEvent::parse("UserPromptSubmit"),
             Some(HookEvent::UserPromptSubmit)
         );
-        assert_eq!(HookEvent::from_str("Invalid"), None);
+        assert_eq!(HookEvent::parse("Invalid"), None);
     }
 
     #[test]

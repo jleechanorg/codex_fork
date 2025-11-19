@@ -422,7 +422,7 @@ async fn execute_user_prompt_submit_hook(
 
     // Determine project directory
     let current_dir_fallback = std::env::current_dir().ok();
-    let project_dir = cwd.or_else(|| current_dir_fallback.as_deref());
+    let project_dir = cwd.or(current_dir_fallback.as_deref());
 
     // Load settings to check if hooks are configured
     let settings = match Settings::load(project_dir) {
@@ -468,8 +468,8 @@ async fn execute_user_prompt_submit_hook(
             let reason = result
                 .block_reason()
                 .unwrap_or_else(|| "Hook blocked execution".to_string());
-            eprintln!("Hook blocked execution: {}", reason);
-            return Err(anyhow::anyhow!("Hook blocked execution: {}", reason));
+            eprintln!("Hook blocked execution: {reason}");
+            return Err(anyhow::anyhow!("Hook blocked execution: {reason}"));
         }
     }
 
@@ -484,7 +484,7 @@ async fn execute_user_prompt_submit_hook(
                     // Check if there's a modified prompt in the JSON
                     json.get("prompt")
                         .and_then(|p| p.as_str())
-                        .map(|s| s.to_string())
+                        .map(std::string::ToString::to_string)
                         .or_else(|| Some(r.stdout.clone()))
                 } else {
                     // If not JSON, use stdout directly
@@ -514,7 +514,7 @@ fn detect_and_substitute_slash_command(prompt: &str, cwd: Option<&Path>) -> anyh
 
         // Determine project directory (cwd or current dir)
         let current_dir_fallback = std::env::current_dir().ok();
-        let project_dir = cwd.or_else(|| current_dir_fallback.as_deref());
+        let project_dir = cwd.or(current_dir_fallback.as_deref());
 
         // Load slash commands from .claude/.codexplus directories
         let registry = SlashCommandRegistry::load(project_dir)?;
