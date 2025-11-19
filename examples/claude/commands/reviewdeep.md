@@ -33,7 +33,7 @@ Deliver a high-signal, security-aware code review entirely inside the CLI harnes
    - Record verification steps (tests run, manual checks)
 
 ## Output Template
-```
+```text
 Findings
 - High - <title> (<file:line>): <issue + fix>
 - Medium - ...

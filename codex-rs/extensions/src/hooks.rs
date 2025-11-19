@@ -111,9 +111,7 @@ impl HookResult {
                     .unwrap_or_else(|| trimmed.to_string()),
             )
         } else {
-            self.parsed_output
-                .as_ref()
-                .and_then(|o| o.reason.clone())
+            self.parsed_output.as_ref().and_then(|o| o.reason.clone())
         }
     }
 }
@@ -211,30 +209,53 @@ impl HookSystem {
 
         // Write input to stdin
         if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(input_json.as_bytes())
-                .await
-                .map_err(|e| {
-                    ExtensionError::HookExecutionFailed(format!("Failed to write stdin: {}", e))
-                })?;
+            stdin.write_all(input_json.as_bytes()).await.map_err(|e| {
+                ExtensionError::HookExecutionFailed(format!("Failed to write stdin: {}", e))
+            })?;
             stdin.flush().await.ok();
             drop(stdin);
         }
 
-        // Wait with timeout
-        let timeout = Duration::from_secs(timeout_secs);
-        let output = tokio::time::timeout(timeout, child.wait_with_output())
-            .await
-            .map_err(|_| ExtensionError::HookTimeout {
-                timeout_ms: timeout_secs * 1000,
-            })?
-            .map_err(|e| {
-                ExtensionError::HookExecutionFailed(format!("Failed to wait for process: {}", e))
-            })?;
+        // Take stdout and stderr before waiting so we can kill the child if needed
+        let stdout_handle = child.stdout.take();
+        let stderr_handle = child.stderr.take();
 
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        let exit_code = output.status.code().unwrap_or(1);
+        // Wait with timeout and kill the process if it times out
+        let timeout = Duration::from_secs(timeout_secs);
+        let status = tokio::select! {
+            result = child.wait() => {
+                result.map_err(|e| ExtensionError::HookExecutionFailed(format!(
+                    "Failed to wait for process: {}",
+                    e
+                )))?
+            }
+            _ = tokio::time::sleep(timeout) => {
+                // Timeout elapsed; kill the hook process to prevent resource leaks
+                let _ = child.kill().await;
+                return Err(ExtensionError::HookTimeout {
+                    timeout_ms: timeout_secs * 1000,
+                });
+            }
+        };
+
+        // Read stdout and stderr
+        let stdout = if let Some(mut handle) = stdout_handle {
+            let mut buf = Vec::new();
+            tokio::io::AsyncReadExt::read_to_end(&mut handle, &mut buf).await.ok();
+            String::from_utf8_lossy(&buf).to_string()
+        } else {
+            String::new()
+        };
+
+        let stderr = if let Some(mut handle) = stderr_handle {
+            let mut buf = Vec::new();
+            tokio::io::AsyncReadExt::read_to_end(&mut handle, &mut buf).await.ok();
+            String::from_utf8_lossy(&buf).to_string()
+        } else {
+            String::new()
+        };
+
+        let exit_code = status.code().unwrap_or(1);
 
         // Try to parse JSON output
         let parsed_output = if !stdout.trim().is_empty() {

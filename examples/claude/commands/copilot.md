@@ -18,6 +18,13 @@ Get PR context and start timing:
 ```bash
 # Get PR number from arguments or current context
 pr_num="${ARGUMENTS:-$(gh pr view --json number -q .number 2>/dev/null || echo "2")}"
+
+# Validate PR number is numeric
+if ! printf '%s\n' "$pr_num" | grep -Eq '^[0-9]+$'; then
+  echo "❌ Invalid PR number: $pr_num" >&2
+  exit 1
+fi
+
 echo "🎯 Processing PR #$pr_num"
 
 # Record start time
@@ -55,7 +62,7 @@ gh_api() {
 }
 
 # Show current PR status (compatible fields)
-gh pr view $pr_num --json number,title,state,mergeable,reviews -q '
+gh pr view "$pr_num" --json number,title,state,mergeable,reviews -q '
   "📋 PR #\(.number): \(.title)"
   + "\n📊 State: \(.state) | Mergeable: \(.mergeable)"
   + "\n👥 Reviews: \(.reviews | length) total"'
@@ -270,7 +277,7 @@ if [ -n "$(git diff --stat 2>/dev/null)" ]; then
   mkdir -p "/tmp/$BRANCH_NAME"
   commit_msg="/tmp/$BRANCH_NAME/commit_message.txt"
   {
-    echo "fix: address PR #$pr_num review comments"
+    echo "fix: address PR #${pr_num} review comments"
     echo
     echo "- Implemented security fixes"
     echo "- Resolved reported bugs"
@@ -321,7 +328,7 @@ fi
 
 # Final status
 echo ""
-gh pr view $pr_num --json state,mergeable,reviews -q '
+gh pr view "$pr_num" --json state,mergeable,reviews -q '
   "📋 PR Status: \(.state)"
   + "\n🔀 Mergeable: \(.mergeable)"
   + "\n👥 Reviews: \(.reviews | length) total"'
@@ -345,10 +352,10 @@ gh api "repos/$owner/$repo/issues/$pr_num/comments" \
 
 # Optional: Auto-merge if allowed and coverage is 100% and PR is mergeable
 if [ "${COPILOT_ALLOW_AUTOMERGE:-0}" = "1" ]; then
-  mergeable_state=$(gh pr view $pr_num --json mergeable --jq .mergeable)
+  mergeable_state=$(gh pr view "$pr_num" --json mergeable --jq .mergeable)
   if [ "$mergeable_state" = "MERGEABLE" ] && [ "$coverage_str" != "N/A" ] && echo "$coverage_str" | grep -q "100%"; then
     echo "🔀 Auto-merge enabled and conditions met. Attempting merge..."
-    gh pr merge $pr_num --squash --delete-branch -y && echo "✅ PR merged (squash)" || echo "⚠️ Auto-merge attempt failed"
+    gh pr merge "$pr_num" --squash --delete-branch -y && echo "✅ PR merged (squash)" || echo "⚠️ Auto-merge attempt failed"
   else
     echo "ℹ️ Auto-merge skipped: not mergeable or coverage < 100%"
   fi

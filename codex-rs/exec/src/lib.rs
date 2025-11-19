@@ -500,15 +500,17 @@ async fn execute_user_prompt_submit_hook(
 }
 
 /// Detects slash commands in the prompt and substitutes them with their content.
-fn detect_and_substitute_slash_command(
-    prompt: &str,
-    cwd: Option<&Path>,
-) -> anyhow::Result<String> {
+fn detect_and_substitute_slash_command(prompt: &str, cwd: Option<&Path>) -> anyhow::Result<String> {
     use codex_extensions::SlashCommandRegistry;
 
     // Check if this looks like a slash command
     if let Some((cmd_name, args)) = SlashCommandRegistry::detect_command(prompt) {
-        tracing::info!("Detected slash command: /{} with args: '{}'", cmd_name, args);
+        tracing::info!(
+            "Detected slash command: /{} ({} chars)",
+            cmd_name,
+            args.len()
+        );
+        tracing::debug!("Slash command args: '{}'", args);
 
         // Determine project directory (cwd or current dir)
         let current_dir_fallback = std::env::current_dir().ok();

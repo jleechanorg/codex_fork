@@ -15,7 +15,7 @@ When this command is executed:
 Arguments: $ARGUMENTS (optional name to greet)
 
 Example output:
-```
+```text
 🎉 Hello [name/world]!
 
 📅 Current date: [date]

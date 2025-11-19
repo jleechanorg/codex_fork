@@ -124,60 +124,39 @@ test result: ok. 7 passed; 0 failed; 0 ignored
 Total: 29/29 tests passing ✅
 ```
 
-## What's NOT Done (CLI Integration)
+## CLI Integration Status
 
-The extension system is a **library** that provides the infrastructure for slash commands and hooks. However, it is **not yet integrated** into the Codex CLI itself.
+### ✅ Completed Integrations
 
-To actually use slash commands with `codex exec --yolo "/hello World"`, the following integration work would be needed:
+The extension system has been **successfully integrated** into the Codex CLI:
 
-### Required CLI Integration
+1. **Slash Command Integration in `codex-rs/exec/src/lib.rs`** ✅
+   - Implemented at line 502-537 via `detect_and_substitute_slash_command()`
+   - Detects `/command args` syntax via `SlashCommandRegistry::detect_command()`
+   - Substitutes command content before sending to LLM
+   - Falls back to original prompt if command not found
+   - Integrated in prompt processing pipeline (line 118-124)
 
-1. **Slash Command Integration in `codex-rs/exec/src/lib.rs`:**
-   - Around line 83-115 where prompts are processed
-   - Add `SlashCommandRegistry::detect_command()` to check for `/` prefix
-   - Substitute command content before sending to LLM
-   - Example:
-   ```rust
-   use codex_extensions::SlashCommandRegistry;
+2. **UserPromptSubmit Hook Integration** ✅
+   - Implemented at line 417-500 via `execute_user_prompt_submit_hook()`
+   - Executes hooks before processing user input
+   - Supports blocking hooks with proper error handling (returns error, no hard exit)
+   - Allows hooks to modify or validate prompts
 
-   // After reading prompt
-   let registry = SlashCommandRegistry::load(Some(&project_dir))?;
-   let final_prompt = if let Some((cmd_name, args)) = SlashCommandRegistry::detect_command(&prompt) {
-       if let Some(cmd) = registry.get(&cmd_name) {
-           cmd.substitute_arguments(&args)
-       } else {
-           prompt // Use original if command not found
-       }
-   } else {
-       prompt
-   };
-   ```
+3. **Dependency Updates** ✅
+   - Added `codex-extensions` to `codex-rs/exec/Cargo.toml`
+   - Added `codex-extensions` to `codex-rs/tui/Cargo.toml`
+   - All workspace dependencies configured
 
-2. **Hook Integration Throughout Codebase:**
-   - **SessionStart**: In `main.rs` or early initialization
-   - **UserPromptSubmit**: Before processing user input in exec/tui
-   - **PreToolUse/PostToolUse**: In tool execution pipeline
-   - **SessionEnd**: In cleanup/shutdown code
-   - Example:
-   ```rust
-   use codex_extensions::{HookSystem, HookEvent, HookInput};
+### 🔄 Remaining Integration Opportunities
 
-   // At startup
-   let hook_system = HookSystem::new(Some(&project_dir))?;
-   hook_system.execute(HookEvent::SessionStart, input).await?;
-   ```
+Additional hook events could be integrated in the future:
 
-3. **Dependency Updates:**
-   - Add `codex-extensions` to `codex-cli/Cargo.toml`
-   - Add `codex-extensions` to `codex-exec/Cargo.toml`
-   - Add `codex-extensions` to `codex-tui/Cargo.toml`
+- **SessionStart**: In `main.rs` or early initialization (not yet integrated)
+- **PreToolUse/PostToolUse**: In tool execution pipeline (not yet integrated)
+- **SessionEnd**: In cleanup/shutdown code (not yet integrated)
 
-### Estimated Effort for CLI Integration
-
-- **Slash commands**: ~2-4 hours (straightforward prompt substitution)
-- **Hooks**: ~8-12 hours (requires integration at multiple lifecycle points)
-- **Testing**: ~4-6 hours (test with real workflows)
-- **Total**: ~14-22 hours of additional work
+These are **optional enhancements**. The core functionality (slash commands + UserPromptSubmit hooks) is complete and working.
 
 ## Architecture Summary
 

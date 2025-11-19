@@ -308,10 +308,7 @@ mod tests {
         // Should have hooks from .claude and statusLine from .codexplus
         assert!(settings.hooks.contains_key("UserPromptSubmit"));
         assert!(settings.status_line.is_some());
-        assert_eq!(
-            settings.status_line.unwrap().command,
-            "codexplus_status.sh"
-        );
+        assert_eq!(settings.status_line.unwrap().command, "codexplus_status.sh");
     }
 
     #[test]

@@ -42,11 +42,12 @@ impl SlashCommand {
         })?;
 
         // Parse frontmatter
-        let metadata: CommandMetadata =
-            serde_yaml::from_str(&frontmatter).map_err(|e| ExtensionError::InvalidCommandFormat {
+        let metadata: CommandMetadata = serde_yaml::from_str(&frontmatter).map_err(|e| {
+            ExtensionError::InvalidCommandFormat {
                 path: path.to_path_buf(),
                 reason: format!("Invalid YAML frontmatter: {}", e),
-            })?;
+            }
+        })?;
 
         Ok(SlashCommand {
             metadata,
@@ -141,8 +142,7 @@ impl SlashCommandRegistry {
 
     /// Register a command
     pub fn register(&mut self, command: SlashCommand) {
-        self.commands
-            .insert(command.metadata.name.clone(), command);
+        self.commands.insert(command.metadata.name.clone(), command);
     }
 
     /// Get a command by name
