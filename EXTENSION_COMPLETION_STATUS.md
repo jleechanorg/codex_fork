@@ -1,5 +1,17 @@
 # Extension System Implementation - Completion Status
 
+## Recent Updates (2025-11-19)
+
+### Bug Fixes
+1. **Blocking Hook Error Handling** - Fixed blocking hook implementation in `codex-rs/exec/src/lib.rs:472` to return `Err(anyhow::anyhow!(...))` instead of calling `std::process::exit(1)`. This ensures proper async error handling and graceful shutdown when hooks block execution.
+
+2. **Code Cleanup** - Removed unused import (`from fastapi.responses import Response`) from `examples/claude/hooks/post_add_header.py`.
+
+### Test Results
+- All 29 tests passing (22 unit + 7 integration)
+- CLI integration verified
+- Blocking hook error handling confirmed working
+
 ## Summary
 
 The extension system infrastructure for slash commands and hooks has been successfully implemented, tested, and documented. This implementation provides a complete, production-ready Rust library for extending Codex with custom slash commands and lifecycle hooks.
@@ -186,10 +198,10 @@ Extension System Architecture
 │   ├── 7 integration tests
 │   └── Demo program
 │
-└── CLI Integration ❌ NOT DONE
-    ├── codex-exec (prompt processing)
-    ├── codex-tui (interactive mode)
-    └── Hook lifecycle points
+└── CLI Integration ✅ COMPLETE
+    ├── codex-exec (prompt processing with slash commands)
+    ├── codex-exec (UserPromptSubmit hook execution)
+    └── Blocking hook error handling (returns error instead of process exit)
 ```
 
 ## Next Steps (If Continuing)

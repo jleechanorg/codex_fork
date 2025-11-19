@@ -469,7 +469,7 @@ async fn execute_user_prompt_submit_hook(
                 .block_reason()
                 .unwrap_or_else(|| "Hook blocked execution".to_string());
             eprintln!("Hook blocked execution: {}", reason);
-            std::process::exit(1);
+            return Err(anyhow::anyhow!("Hook blocked execution: {}", reason));
         }
     }
 
