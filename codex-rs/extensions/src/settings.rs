@@ -5,8 +5,10 @@
 //! 2. .claude/settings.json (project level)
 //! 3. ~/.claude/settings.json (user level)
 
-use crate::error::{ExtensionError, Result};
-use serde::{Deserialize, Serialize};
+use crate::error::ExtensionError;
+use crate::error::Result;
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -118,7 +120,6 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
     use tempfile::TempDir;
 
     #[test]
@@ -308,10 +309,7 @@ mod tests {
         // Should have hooks from .claude and statusLine from .codexplus
         assert!(settings.hooks.contains_key("UserPromptSubmit"));
         assert!(settings.status_line.is_some());
-        assert_eq!(
-            settings.status_line.unwrap().command,
-            "codexplus_status.sh"
-        );
+        assert_eq!(settings.status_line.unwrap().command, "codexplus_status.sh");
     }
 
     #[test]

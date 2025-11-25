@@ -2,7 +2,11 @@
 //!
 //! Run with: cargo run --example demo
 
-use codex_extensions::{HookSystem, Settings, SlashCommandRegistry, hooks::{HookEvent, HookInput}};
+use codex_extensions::HookSystem;
+use codex_extensions::Settings;
+use codex_extensions::SlashCommandRegistry;
+use codex_extensions::hooks::HookEvent;
+use codex_extensions::hooks::HookInput;
 use std::collections::HashMap;
 
 #[tokio::main]
@@ -17,7 +21,8 @@ async fn main() {
         std::path::PathBuf::from("examples/claude"),
     ];
 
-    let project_dir = possible_paths.into_iter()
+    let project_dir = possible_paths
+        .into_iter()
         .find(|p| p.exists())
         .unwrap_or_else(|| {
             eprintln!("Error: examples/claude directory not found");
@@ -31,7 +36,10 @@ async fn main() {
     match Settings::load_from_file(&settings_path) {
         Ok(settings) => {
             println!("   ✓ Settings loaded successfully");
-            println!("   - Hook events configured: {:?}", settings.hooks.keys().collect::<Vec<_>>());
+            println!(
+                "   - Hook events configured: {:?}",
+                settings.hooks.keys().collect::<Vec<_>>()
+            );
             if let Some(status_line) = &settings.status_line {
                 println!("   - Status line command: {}", status_line.command);
             }
@@ -51,7 +59,10 @@ async fn main() {
         Ok(()) => {
             println!("   ✓ Loaded {} commands:", registry.list().len());
             for cmd in registry.list() {
-                println!("     - /{}: {}", cmd.metadata.name, cmd.metadata.description);
+                println!(
+                    "     - /{}: {}",
+                    cmd.metadata.name, cmd.metadata.description
+                );
             }
 
             println!();
@@ -68,8 +79,10 @@ async fn main() {
                     println!("   ✓ Detected: /{} with args: '{}'", cmd_name, args);
                     if let Some(cmd) = registry.get(&cmd_name) {
                         let substituted = cmd.substitute_arguments(&args);
-                        println!("     Content preview: {}",
-                            substituted.lines().take(2).collect::<Vec<_>>().join(" "));
+                        println!(
+                            "     Content preview: {}",
+                            substituted.lines().take(2).collect::<Vec<_>>().join(" ")
+                        );
                     }
                 } else {
                     println!("   - No command in: {}", input);
@@ -88,7 +101,8 @@ async fn main() {
     // Since our examples/claude IS the .claude directory, we pass its parent
     println!("\n4. Initializing hook system...");
     // For demo purposes, we manually load settings from examples/claude/settings.json
-    match HookSystem::new(None) {  // Use None so it won't find settings, we'll note this
+    match HookSystem::new(None) {
+        // Use None so it won't find settings, we'll note this
         Ok(hook_system) => {
             println!("   ✓ Hook system initialized");
 
@@ -103,7 +117,10 @@ async fn main() {
                 extra: HashMap::new(),
             };
 
-            match hook_system.execute(HookEvent::UserPromptSubmit, input).await {
+            match hook_system
+                .execute(HookEvent::UserPromptSubmit, input)
+                .await
+            {
                 Ok(results) => {
                     if results.is_empty() {
                         println!("   - No hooks configured for UserPromptSubmit");
@@ -138,7 +155,10 @@ async fn main() {
                 extra: HashMap::new(),
             };
 
-            match hook_system.execute(HookEvent::SessionStart, session_start_input).await {
+            match hook_system
+                .execute(HookEvent::SessionStart, session_start_input)
+                .await
+            {
                 Ok(results) => {
                     if results.is_empty() {
                         println!("   - No hooks configured for SessionStart");

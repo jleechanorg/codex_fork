@@ -3,11 +3,14 @@
 //! Executes hook scripts at specific points in the Codex CLI lifecycle.
 //! Hooks communicate via JSON stdin/stdout protocol.
 
-use crate::error::{ExtensionError, Result};
+use crate::error::ExtensionError;
+use crate::error::Result;
 use crate::settings::Settings;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::process::Stdio;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
@@ -40,7 +43,7 @@ impl HookEvent {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_string(s: &str) -> Option<Self> {
         match s {
             "UserPromptSubmit" => Some(HookEvent::UserPromptSubmit),
             "PreToolUse" => Some(HookEvent::PreToolUse),
@@ -111,9 +114,7 @@ impl HookResult {
                     .unwrap_or_else(|| trimmed.to_string()),
             )
         } else {
-            self.parsed_output
-                .as_ref()
-                .and_then(|o| o.reason.clone())
+            self.parsed_output.as_ref().and_then(|o| o.reason.clone())
         }
     }
 }
@@ -122,6 +123,7 @@ impl HookResult {
 #[derive(Debug)]
 pub struct HookSystem {
     settings: Settings,
+    #[allow(dead_code)]
     session_id: String,
     project_dir: PathBuf,
 }
@@ -211,12 +213,9 @@ impl HookSystem {
 
         // Write input to stdin
         if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(input_json.as_bytes())
-                .await
-                .map_err(|e| {
-                    ExtensionError::HookExecutionFailed(format!("Failed to write stdin: {}", e))
-                })?;
+            stdin.write_all(input_json.as_bytes()).await.map_err(|e| {
+                ExtensionError::HookExecutionFailed(format!("Failed to write stdin: {}", e))
+            })?;
             stdin.flush().await.ok();
             drop(stdin);
         }
@@ -288,13 +287,13 @@ impl HookSystem {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            if path.exists() {
-                if let Ok(metadata) = std::fs::metadata(path) {
-                    let permissions = metadata.permissions();
-                    if permissions.mode() & 0o111 != 0 {
-                        // Is executable
-                        return (path_str, vec![]);
-                    }
+            if path.exists()
+                && let Ok(metadata) = std::fs::metadata(path)
+            {
+                let permissions = metadata.permissions();
+                if permissions.mode() & 0o111 != 0 {
+                    // Is executable
+                    return (path_str, vec![]);
                 }
             }
         }
@@ -317,17 +316,16 @@ impl HookSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
     use tempfile::TempDir;
 
     #[test]
     fn test_hook_event_conversion() {
         assert_eq!(HookEvent::UserPromptSubmit.as_str(), "UserPromptSubmit");
         assert_eq!(
-            HookEvent::from_str("UserPromptSubmit"),
+            HookEvent::from_string("UserPromptSubmit"),
             Some(HookEvent::UserPromptSubmit)
         );
-        assert_eq!(HookEvent::from_str("Invalid"), None);
+        assert_eq!(HookEvent::from_string("Invalid"), None);
     }
 
     #[test]

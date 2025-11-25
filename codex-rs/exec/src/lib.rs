@@ -33,7 +33,8 @@ use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use serde_json::Value;
 use std::io::IsTerminal;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use supports_color::Stream;
 use tracing::debug;
 use tracing::error;
@@ -418,7 +419,10 @@ async fn execute_user_prompt_submit_hook(
     prompt: &str,
     cwd: Option<&Path>,
 ) -> anyhow::Result<String> {
-    use codex_extensions::{HookEvent, HookInput, HookSystem, Settings};
+    use codex_extensions::HookEvent;
+    use codex_extensions::HookInput;
+    use codex_extensions::HookSystem;
+    use codex_extensions::Settings;
 
     // Determine project directory
     let current_dir_fallback = std::env::current_dir().ok();
@@ -500,15 +504,16 @@ async fn execute_user_prompt_submit_hook(
 }
 
 /// Detects slash commands in the prompt and substitutes them with their content.
-fn detect_and_substitute_slash_command(
-    prompt: &str,
-    cwd: Option<&Path>,
-) -> anyhow::Result<String> {
+fn detect_and_substitute_slash_command(prompt: &str, cwd: Option<&Path>) -> anyhow::Result<String> {
     use codex_extensions::SlashCommandRegistry;
 
     // Check if this looks like a slash command
     if let Some((cmd_name, args)) = SlashCommandRegistry::detect_command(prompt) {
-        tracing::info!("Detected slash command: /{} with args: '{}'", cmd_name, args);
+        tracing::info!(
+            "Detected slash command: /{} with args: '{}'",
+            cmd_name,
+            args
+        );
 
         // Determine project directory (cwd or current dir)
         let current_dir_fallback = std::env::current_dir().ok();

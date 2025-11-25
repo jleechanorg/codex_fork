@@ -3,10 +3,13 @@
 //! Parses and manages slash commands from markdown files with YAML frontmatter.
 //! Commands are stored in .claude/commands/ or .codexplus/commands/ directories.
 
-use crate::error::{ExtensionError, Result};
-use serde::{Deserialize, Serialize};
+use crate::error::ExtensionError;
+use crate::error::Result;
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 /// Command metadata from YAML frontmatter
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -42,11 +45,12 @@ impl SlashCommand {
         })?;
 
         // Parse frontmatter
-        let metadata: CommandMetadata =
-            serde_yaml::from_str(&frontmatter).map_err(|e| ExtensionError::InvalidCommandFormat {
+        let metadata: CommandMetadata = serde_yaml::from_str(&frontmatter).map_err(|e| {
+            ExtensionError::InvalidCommandFormat {
                 path: path.to_path_buf(),
                 reason: format!("Invalid YAML frontmatter: {}", e),
-            })?;
+            }
+        })?;
 
         Ok(SlashCommand {
             metadata,
@@ -141,8 +145,7 @@ impl SlashCommandRegistry {
 
     /// Register a command
     pub fn register(&mut self, command: SlashCommand) {
-        self.commands
-            .insert(command.metadata.name.clone(), command);
+        self.commands.insert(command.metadata.name.clone(), command);
     }
 
     /// Get a command by name
@@ -177,7 +180,6 @@ impl SlashCommandRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
     use tempfile::TempDir;
 
     #[test]
