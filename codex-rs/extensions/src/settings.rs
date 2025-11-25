@@ -97,15 +97,27 @@ impl Settings {
         })
     }
 
-    /// Merge another settings instance into this one
-    /// Later settings take precedence
+    /// Merge another settings instance into this one.
+    ///
+    /// Merge semantics:
+    /// - **Hooks**: Concatenated from all sources. Hooks from higher-priority sources
+    ///   (e.g., `.codexplus/`) are appended after lower-priority ones (e.g., `~/.claude/`).
+    ///   This means all configured hooks execute in precedence order during lifecycle events.
+    /// - **Status line**: Replaced by higher-priority source. Only the last (highest priority)
+    ///   status_line configuration is used.
+    ///
+    /// Precedence order (lowest to highest):
+    /// 1. `~/.claude/settings.json` (user level)
+    /// 2. `.claude/settings.json` (project level)
+    /// 3. `.codexplus/settings.json` (highest priority)
     fn merge(&mut self, other: Settings) {
         // Merge hooks - concatenate arrays for same event
+        // All hooks from all sources will execute in order of precedence
         for (event, entries) in other.hooks {
             self.hooks.entry(event).or_default().extend(entries);
         }
 
-        // Status line: replace if present
+        // Status line: replace with higher-priority source
         if other.status_line.is_some() {
             self.status_line = other.status_line;
         }

@@ -279,11 +279,16 @@ impl HookSystem {
         Ok(PathBuf::from(command))
     }
 
-    /// Determine executable and arguments based on file type
+    /// Determine executable and arguments based on file type.
+    ///
+    /// On Unix: checks executable permissions first, then falls back to interpreter by extension.
+    /// On Windows: relies on file extension since executable bits don't apply. Files with
+    /// recognized extensions (.py, .sh, .js) use their interpreters. Other files execute directly
+    /// and should have a recognized Windows executable extension (.exe, .cmd, .bat, .ps1).
     fn determine_executable(&self, path: &Path) -> (String, Vec<String>) {
         let path_str = path.to_string_lossy().to_string();
 
-        // Check if executable
+        // Check if executable (Unix only - executable bits don't apply on Windows)
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -298,17 +303,29 @@ impl HookSystem {
             }
         }
 
-        // Check extension
+        // Check extension for interpreter mapping
         if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
             match ext {
                 "py" => return ("python3".to_string(), vec![path_str]),
                 "sh" => return ("bash".to_string(), vec![path_str]),
                 "js" => return ("node".to_string(), vec![path_str]),
+                // Windows-specific executable extensions - execute directly
+                #[cfg(windows)]
+                "exe" | "cmd" | "bat" => return (path_str, vec![]),
+                #[cfg(windows)]
+                "ps1" => {
+                    return (
+                        "powershell".to_string(),
+                        vec!["-File".to_string(), path_str],
+                    );
+                }
                 _ => {}
             }
         }
 
         // Default: try to execute directly
+        // On Windows, this requires the file to have a recognized executable extension
+        // or be associated with an application
         (path_str, vec![])
     }
 }

@@ -414,11 +414,53 @@ async fn resolve_resume_path(
     }
 }
 
-/// Executes UserPromptSubmit hooks and applies any modifications to the prompt.
+/// Result of executing UserPromptSubmit hooks
+///
+/// Contains all data from hook execution following the JSON protocol:
+/// - `prompt`: The (possibly modified) prompt text
+/// - `blocked`: Whether a hook blocked execution
+/// - `block_reason`: Reason for blocking (if blocked)
+/// - `hook_specific_output`: Additional data from hooks
+struct HookExecutionResult {
+    prompt: String,
+    blocked: bool,
+    block_reason: Option<String>,
+    #[allow(dead_code)]
+    hook_specific_output: Option<serde_json::Value>,
+}
+
+/// Executes UserPromptSubmit hooks and returns a structured result.
+///
+/// Hook output protocol:
+/// - Hooks receive JSON input via stdin with session context and the original prompt
+/// - Hooks should return JSON to stdout with a `prompt` field to modify the prompt
+/// - If a hook returns JSON without a `prompt` field, the prompt is unchanged
+/// - If a hook returns non-JSON output, the prompt is unchanged (output is logged)
+/// - Hooks can block execution by exiting with code 2 or returning `{"decision": "block"}`
+///
+/// This function returns a `HookExecutionResult` that captures all hook output.
 async fn execute_user_prompt_submit_hook(
     prompt: &str,
     cwd: Option<&Path>,
 ) -> anyhow::Result<String> {
+    let result = execute_user_prompt_submit_hook_internal(prompt, cwd).await?;
+
+    if result.blocked {
+        let reason = result
+            .block_reason
+            .unwrap_or_else(|| "Hook blocked execution".to_string());
+        eprintln!("Hook blocked execution: {reason}");
+        std::process::exit(1);
+    }
+
+    Ok(result.prompt)
+}
+
+/// Internal implementation that returns the full structured result
+async fn execute_user_prompt_submit_hook_internal(
+    prompt: &str,
+    cwd: Option<&Path>,
+) -> anyhow::Result<HookExecutionResult> {
     use codex_extensions::HookEvent;
     use codex_extensions::HookInput;
     use codex_extensions::HookSystem;
@@ -426,20 +468,30 @@ async fn execute_user_prompt_submit_hook(
 
     // Determine project directory
     let current_dir_fallback = std::env::current_dir().ok();
-    let project_dir = cwd.or_else(|| current_dir_fallback.as_deref());
+    let project_dir = cwd.or(current_dir_fallback.as_deref());
 
     // Load settings to check if hooks are configured
     let settings = match Settings::load(project_dir) {
         Ok(s) => s,
         Err(e) => {
             tracing::debug!("No hook settings found: {}", e);
-            return Ok(prompt.to_string());
+            return Ok(HookExecutionResult {
+                prompt: prompt.to_string(),
+                blocked: false,
+                block_reason: None,
+                hook_specific_output: None,
+            });
         }
     };
 
     // Check if UserPromptSubmit hooks are configured
     if !settings.hooks.contains_key("UserPromptSubmit") {
-        return Ok(prompt.to_string());
+        return Ok(HookExecutionResult {
+            prompt: prompt.to_string(),
+            blocked: false,
+            block_reason: None,
+            hook_specific_output: None,
+        });
     }
 
     // Create hook system and execute hooks
@@ -469,38 +521,55 @@ async fn execute_user_prompt_submit_hook(
     // Check for blocking hooks
     for result in &results {
         if result.is_blocking() {
-            let reason = result
-                .block_reason()
-                .unwrap_or_else(|| "Hook blocked execution".to_string());
-            eprintln!("Hook blocked execution: {}", reason);
-            std::process::exit(1);
+            return Ok(HookExecutionResult {
+                prompt: prompt.to_string(),
+                blocked: true,
+                block_reason: result.block_reason(),
+                hook_specific_output: result
+                    .parsed_output
+                    .as_ref()
+                    .and_then(|o| o.hook_specific_output.clone()),
+            });
         }
     }
 
-    // Use the stdout from the last hook as the modified prompt if it's non-empty JSON
-    // Otherwise use the original prompt
-    let modified_prompt = results
+    // Extract modified prompt from hook output
+    // Protocol: hooks should return JSON with a `prompt` field to modify the prompt
+    // If no `prompt` field or non-JSON output, the original prompt is preserved
+    let (modified_prompt, hook_specific_output) = results
         .last()
-        .and_then(|r| {
+        .map(|r| {
             if !r.stdout.trim().is_empty() {
-                // Try to parse as JSON first
+                // Try to parse as JSON
                 if let Ok(json) = serde_json::from_str::<serde_json::Value>(&r.stdout) {
-                    // Check if there's a modified prompt in the JSON
-                    json.get("prompt")
+                    // Extract prompt if present, otherwise use original
+                    let new_prompt = json
+                        .get("prompt")
                         .and_then(|p| p.as_str())
-                        .map(|s| s.to_string())
-                        .or_else(|| Some(r.stdout.clone()))
+                        .map(std::string::ToString::to_string)
+                        .unwrap_or_else(|| prompt.to_string());
+                    let specific_output = json.get("hookSpecificOutput").cloned();
+                    (new_prompt, specific_output)
                 } else {
-                    // If not JSON, use stdout directly
-                    Some(r.stdout.clone())
+                    // Non-JSON output: log it but preserve original prompt
+                    tracing::debug!(
+                        "Hook returned non-JSON output, preserving original prompt: {}",
+                        r.stdout.chars().take(100).collect::<String>()
+                    );
+                    (prompt.to_string(), None)
                 }
             } else {
-                None
+                (prompt.to_string(), None)
             }
         })
-        .unwrap_or_else(|| prompt.to_string());
+        .unwrap_or_else(|| (prompt.to_string(), None));
 
-    Ok(modified_prompt)
+    Ok(HookExecutionResult {
+        prompt: modified_prompt,
+        blocked: false,
+        block_reason: None,
+        hook_specific_output,
+    })
 }
 
 /// Detects slash commands in the prompt and substitutes them with their content.
@@ -517,7 +586,7 @@ fn detect_and_substitute_slash_command(prompt: &str, cwd: Option<&Path>) -> anyh
 
         // Determine project directory (cwd or current dir)
         let current_dir_fallback = std::env::current_dir().ok();
-        let project_dir = cwd.or_else(|| current_dir_fallback.as_deref());
+        let project_dir = cwd.or(current_dir_fallback.as_deref());
 
         // Load slash commands from .claude/.codexplus directories
         let registry = SlashCommandRegistry::load(project_dir)?;

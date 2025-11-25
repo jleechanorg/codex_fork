@@ -11,6 +11,7 @@ Execute the full /copilot workflow adapted for Codex CLI. This command processes
 Optional behaviors inspired by /copilot:
 - Set `COPILOT_RECENT_LIMIT` (e.g. 30) to only process the most recent N original comments
 - Set `COPILOT_ALLOW_AUTOMERGE=1` to auto-merge when coverage is 100% and PR is mergeable
+- Set `COPILOT_RESPONSE_TAG` to customize the AI responder tag (default: "[AI Responder codex]")
 
 ## 🚀 Phase 1: Initial Setup
 
@@ -166,7 +167,8 @@ for i in $(seq 0 $((original_count - 1))); do
   body=$(echo "$comment" | jq -r '.body')
   path=$(echo "$comment" | jq -r '.path // "general"')
   
-  tag="[AI Responder codex]"
+  # Configurable AI responder tag (customize via COPILOT_RESPONSE_TAG environment variable)
+  tag="${COPILOT_RESPONSE_TAG:-[AI Responder codex]}"
   
   # Generate contextual response
   if echo "$body" | grep -iE "security|vulnerability" > /dev/null; then
