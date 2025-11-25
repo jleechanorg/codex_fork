@@ -97,12 +97,14 @@ async fn main() {
     println!();
 
     // Initialize hook system
-    // Note: HookSystem expects a project directory that contains .claude/
-    // Since our examples/claude IS the .claude directory, we pass its parent
+    // Note: HookSystem expects a project directory that contains .claude/ subdirectory
+    // Since examples/claude IS the commands/hooks directory structure, we pass its parent
+    // to simulate having a .claude/ directory under the project root
     println!("\n4. Initializing hook system...");
-    // For demo purposes, we manually load settings from examples/claude/settings.json
-    match HookSystem::new(None) {
-        // Use None so it won't find settings, we'll note this
+    // Use parent of project_dir so HookSystem can find .claude/ (i.e., examples/claude)
+    // This demonstrates that hooks are loaded from examples/claude/ when we pass examples/
+    let parent_for_hooks = project_dir.parent().unwrap_or(project_dir.as_path());
+    match HookSystem::new(Some(parent_for_hooks)) {
         Ok(hook_system) => {
             println!("   ✓ Hook system initialized");
 
