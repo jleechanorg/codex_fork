@@ -98,7 +98,15 @@ impl Settings {
     }
 
     /// Merge another settings instance into this one
-    /// Later settings take precedence
+    ///
+    /// Merge semantics:
+    /// - **hooks**: Concatenated (hooks from all sources execute in order).
+    ///   This allows layering hooks from user-level (~/.claude/), project-level
+    ///   (.claude/), and override-level (.codexplus/) sources.
+    /// - **status_line**: Replaced (higher-precedence source overrides).
+    ///
+    /// Note: If you need only one hook definition to execute (true override),
+    /// you should clear the hooks for that event in the higher-precedence file.
     fn merge(&mut self, other: Settings) {
         // Merge hooks - concatenate arrays for same event
         for (event, entries) in other.hooks {

@@ -97,12 +97,65 @@ async fn main() {
     println!();
 
     // Initialize hook system
-    // Note: HookSystem expects a project directory that contains .claude/
-    // Since our examples/claude IS the .claude directory, we pass its parent
+    // Note: HookSystem expects a project directory that contains .claude/ or .codexplus/
+    // We create a temporary structure to demonstrate hook execution
     println!("\n4. Initializing hook system...");
-    // For demo purposes, we manually load settings from examples/claude/settings.json
-    match HookSystem::new(None) {
-        // Use None so it won't find settings, we'll note this
+    println!("   Note: This demo shows hook system initialization.");
+    println!("   In production, hooks would be in .claude/hooks/ or .codexplus/hooks/");
+
+    // Create a temporary directory structure for demo purposes
+    let temp_dir = std::env::temp_dir().join("codex-extensions-demo");
+    let temp_claude = temp_dir.join(".claude");
+    let temp_hooks = temp_claude.join("hooks");
+
+    // Clean up any previous demo
+    let _ = std::fs::remove_dir_all(&temp_dir);
+    std::fs::create_dir_all(&temp_hooks).ok();
+
+    // Copy settings to temp .claude directory
+    let source_settings = project_dir.join("settings.json");
+    let dest_settings = temp_claude.join("settings.json");
+    if source_settings.exists() {
+        std::fs::copy(&source_settings, &dest_settings).ok();
+    }
+
+    // Create a simple demo hook
+    let demo_hook = temp_hooks.join("echo.sh");
+    let hook_content = r#"#!/bin/bash
+# Simple echo hook for demo - reads JSON input and outputs it
+cat
+"#;
+    std::fs::write(&demo_hook, hook_content).ok();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(mut perms) = std::fs::metadata(&demo_hook).map(|m| m.permissions()) {
+            perms.set_mode(0o755);
+            let _ = std::fs::set_permissions(&demo_hook, perms);
+        }
+    }
+
+    // Create settings with the echo hook
+    let demo_settings = r#"{
+    "hooks": {
+        "UserPromptSubmit": [
+            {
+                "matcher": "*",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "echo.sh",
+                        "timeout": 5
+                    }
+                ]
+            }
+        ]
+    }
+}"#;
+    std::fs::write(&dest_settings, demo_settings).ok();
+
+    match HookSystem::new(Some(&temp_dir)) {
         Ok(hook_system) => {
             println!("   ✓ Hook system initialized");
 
@@ -191,4 +244,7 @@ async fn main() {
     println!("2. Use SlashCommandRegistry::load() to load commands");
     println!("3. Use HookSystem::new() to initialize hooks");
     println!("4. Call hook_system.execute() at appropriate lifecycle points");
+
+    // Cleanup temporary directory
+    let _ = std::fs::remove_dir_all(&temp_dir);
 }

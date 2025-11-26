@@ -78,8 +78,69 @@ impl SlashCommand {
     }
 
     /// Substitute arguments into the command content
+    ///
+    /// Supports the following placeholders:
+    /// - `$ARGUMENTS` - All arguments joined by space
+    /// - `$_raw_args` - Same as $ARGUMENTS
+    /// - `$1`, `$2`, ... - Positional arguments
+    ///
+    /// Note: Placeholders are substituted in the template content only.
+    /// Argument values containing placeholder-like strings are not affected.
     pub fn substitute_arguments(&self, args: &str) -> String {
-        self.content.replace("$ARGUMENTS", args)
+        // Parse positional arguments
+        let positional: Vec<&str> = if args.is_empty() {
+            vec![]
+        } else {
+            args.split_whitespace().collect()
+        };
+
+        // Use a single-pass approach to avoid issues with argument values
+        // containing placeholder patterns
+        let mut result = String::with_capacity(self.content.len() + args.len());
+        let chars: Vec<char> = self.content.chars().collect();
+        let mut i = 0;
+
+        while i < chars.len() {
+            if chars[i] == '$' && i + 1 < chars.len() {
+                // Check for $ARGUMENTS
+                let remaining = &self.content[self
+                    .content
+                    .char_indices()
+                    .nth(i)
+                    .map(|(j, _)| j)
+                    .unwrap_or(0)..];
+                if remaining.starts_with("$ARGUMENTS") {
+                    result.push_str(args);
+                    i += "$ARGUMENTS".len();
+                    continue;
+                }
+                // Check for $_raw_args
+                if remaining.starts_with("$_raw_args") {
+                    result.push_str(args);
+                    i += "$_raw_args".len();
+                    continue;
+                }
+                // Check for positional $1, $2, etc.
+                if chars[i + 1].is_ascii_digit() {
+                    let mut num_str = String::new();
+                    let mut j = i + 1;
+                    while j < chars.len() && chars[j].is_ascii_digit() {
+                        num_str.push(chars[j]);
+                        j += 1;
+                    }
+                    if let Ok(num) = num_str.parse::<usize>()
+                        && num > 0 && num <= positional.len() {
+                            result.push_str(positional[num - 1]);
+                            i = j;
+                            continue;
+                        }
+                }
+            }
+            result.push(chars[i]);
+            i += 1;
+        }
+
+        result
     }
 }
 
@@ -236,6 +297,66 @@ Hello $ARGUMENTS!
         let cmd = SlashCommand::from_string(content, Path::new("test.md")).unwrap();
         let substituted = cmd.substitute_arguments("World");
         assert_eq!(substituted.trim(), "Hello World!");
+    }
+
+    #[test]
+    fn test_substitute_positional_arguments() {
+        let content = r#"---
+name: test-args
+description: Test argument handling
+---
+
+Arg 1: $1
+Arg 2: $2
+All args: $_raw_args
+"#;
+
+        let cmd = SlashCommand::from_string(content, Path::new("test.md")).unwrap();
+        let substituted = cmd.substitute_arguments("first second third");
+
+        assert!(substituted.contains("Arg 1: first"));
+        assert!(substituted.contains("Arg 2: second"));
+        assert!(substituted.contains("All args: first second third"));
+    }
+
+    #[test]
+    fn test_substitute_empty_arguments() {
+        let content = r#"---
+name: test
+description: Test
+---
+
+Args: $ARGUMENTS
+Arg1: $1
+"#;
+
+        let cmd = SlashCommand::from_string(content, Path::new("test.md")).unwrap();
+        let substituted = cmd.substitute_arguments("");
+
+        assert!(substituted.contains("Args:"));
+        // $1 placeholder remains since no arg provided
+        assert!(substituted.contains("Arg1: $1"));
+    }
+
+    #[test]
+    fn test_substitute_arguments_with_placeholder_like_values() {
+        // Test that argument values containing placeholder-like strings
+        // don't cause incorrect substitutions
+        let content = r#"---
+name: test
+description: Test
+---
+
+Arg 1: $1
+Arg 2: $2
+"#;
+
+        let cmd = SlashCommand::from_string(content, Path::new("test.md")).unwrap();
+        // Second arg contains "$2" which should NOT be treated as a placeholder
+        let substituted = cmd.substitute_arguments("test$2value foo");
+
+        assert!(substituted.contains("Arg 1: test$2value"));
+        assert!(substituted.contains("Arg 2: foo"));
     }
 
     #[test]
