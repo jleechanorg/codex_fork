@@ -5,9 +5,12 @@
 //! - End-to-end slash command detection and execution
 //! - Hook execution in realistic scenarios
 
+#[cfg(unix)]
 use codex_extensions::HookSystem;
+#[cfg(unix)]
 use codex_extensions::Settings;
 use codex_extensions::SlashCommandRegistry;
+#[cfg(unix)]
 use std::env;
 use tempfile::TempDir;
 
