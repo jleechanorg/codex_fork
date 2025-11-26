@@ -78,8 +78,26 @@ impl SlashCommand {
     }
 
     /// Substitute arguments into the command content
+    /// Supports $ARGUMENTS, $_raw_args, $1, $2, etc.
     pub fn substitute_arguments(&self, args: &str) -> String {
-        self.content.replace("$ARGUMENTS", args)
+        let mut result = self.content.clone();
+
+        // $ARGUMENTS: all arguments joined by space
+        result = result.replace("$ARGUMENTS", args);
+
+        // $_raw_args: same as $ARGUMENTS
+        result = result.replace("$_raw_args", args);
+
+        // Parse positional arguments (split by whitespace)
+        let positional_args: Vec<&str> = args.split_whitespace().collect();
+
+        // $1, $2, ... (positional arguments)
+        for (i, arg) in positional_args.iter().enumerate() {
+            let placeholder = format!("${}", i + 1);
+            result = result.replace(&placeholder, arg);
+        }
+
+        result
     }
 }
 
@@ -236,6 +254,28 @@ Hello $ARGUMENTS!
         let cmd = SlashCommand::from_string(content, Path::new("test.md")).unwrap();
         let substituted = cmd.substitute_arguments("World");
         assert_eq!(substituted.trim(), "Hello World!");
+    }
+
+    #[test]
+    fn test_substitute_positional_arguments() {
+        let content = r#"---
+name: test-args
+description: Test argument handling
+---
+
+You received the following arguments: $ARGUMENTS
+
+Arg 1: $1
+Arg 2: $2
+All args: $_raw_args
+"#;
+
+        let cmd = SlashCommand::from_string(content, Path::new("test.md")).unwrap();
+        let substituted = cmd.substitute_arguments("foo bar");
+        assert!(substituted.contains("You received the following arguments: foo bar"));
+        assert!(substituted.contains("Arg 1: foo"));
+        assert!(substituted.contains("Arg 2: bar"));
+        assert!(substituted.contains("All args: foo bar"));
     }
 
     #[test]

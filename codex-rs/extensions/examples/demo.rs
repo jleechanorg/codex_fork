@@ -97,14 +97,24 @@ async fn main() {
     println!();
 
     // Initialize hook system
-    // Note: HookSystem expects a project directory that contains .claude/
-    // Since our examples/claude IS the .claude directory, we pass its parent
+    // Note: HookSystem expects a project directory that contains a .claude/ subdirectory.
+    // Since our examples/claude IS the .claude directory itself (not a parent containing .claude/),
+    // we need to pass the parent of examples/claude for HookSystem to find the hooks.
     println!("\n4. Initializing hook system...");
-    // For demo purposes, we manually load settings from examples/claude/settings.json
-    match HookSystem::new(None) {
-        // Use None so it won't find settings, we'll note this
+
+    // Get the parent directory of examples/claude so HookSystem can find examples/.claude/
+    // In a real project, you would pass the project root that contains .claude/
+    let parent_dir = project_dir.parent();
+
+    match HookSystem::new(parent_dir) {
         Ok(hook_system) => {
             println!("   ✓ Hook system initialized");
+            println!(
+                "   Note: Looking for hooks in {:?}/.claude/",
+                parent_dir
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|| ".".to_string())
+            );
 
             println!();
             println!("5. Testing hook execution (UserPromptSubmit):");
