@@ -422,6 +422,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn test_execute_simple_hook() {
         let temp_dir = TempDir::new().unwrap();
 
@@ -482,6 +483,7 @@ cat  # Echo stdin to stdout
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn test_hook_timeout() {
         let temp_dir = TempDir::new().unwrap();
 

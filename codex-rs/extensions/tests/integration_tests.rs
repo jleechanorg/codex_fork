@@ -114,6 +114,7 @@ cat | jq -c '.session_id'
 }
 
 #[tokio::test]
+#[cfg(unix)]
 async fn test_hook_execution_integration() {
     let project = TempDir::new().unwrap();
     let hooks_dir = project.path().join(".claude/hooks");
@@ -181,6 +182,7 @@ exit 0
 }
 
 #[tokio::test]
+#[cfg(unix)]
 async fn test_hook_blocking_integration() {
     let project = TempDir::new().unwrap();
     let hooks_dir = project.path().join(".claude/hooks");
@@ -327,6 +329,7 @@ Command content for {}
 }
 
 #[tokio::test]
+#[cfg(unix)]
 async fn test_multiple_hooks_execution() {
     let project = TempDir::new().unwrap();
     let hooks_dir = project.path().join(".claude/hooks");
