@@ -84,8 +84,7 @@ exit 0
     // The hook should have injected context
     assert!(
         combined.contains("HOOK_INJECTED_CONTEXT") || combined.contains("original prompt"),
-        "hook context or original prompt should be in request, got: {}",
-        combined
+        "hook context or original prompt should be in request, got: {combined}"
     );
 
     Ok(())
@@ -183,8 +182,7 @@ async fn no_hooks_passes_through() -> anyhow::Result<()> {
     let combined = user_texts.join(" ");
     assert!(
         combined.contains("prompt without hooks"),
-        "original prompt should be sent, got: {}",
-        combined
+        "original prompt should be sent, got: {combined}"
     );
 
     Ok(())
@@ -258,8 +256,7 @@ exit 1
     let combined = user_texts.join(" ");
     assert!(
         combined.contains("prompt with erroring hook"),
-        "prompt should be sent despite hook error, got: {}",
-        combined
+        "prompt should be sent despite hook error, got: {combined}"
     );
 
     Ok(())

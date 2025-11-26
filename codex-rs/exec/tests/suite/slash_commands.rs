@@ -61,8 +61,7 @@ Say hello to: $ARGUMENTS
     let combined = user_texts.join(" ");
     assert!(
         combined.contains("Say hello to:") || combined.contains("Greeting Command"),
-        "substituted content should be in request, got: {}",
-        combined
+        "substituted content should be in request, got: {combined}"
     );
 
     Ok(())
@@ -95,8 +94,7 @@ async fn non_slash_command_passes_through() -> anyhow::Result<()> {
     let combined = user_texts.join(" ");
     assert!(
         combined.contains("regular prompt without slash"),
-        "original prompt should be in request, got: {}",
-        combined
+        "original prompt should be in request, got: {combined}"
     );
 
     Ok(())
@@ -130,8 +128,7 @@ async fn unknown_slash_command_falls_back() -> anyhow::Result<()> {
     // Either the original command is sent or it was handled gracefully
     assert!(
         combined.contains("nonexistent_command") || combined.contains("/nonexistent_command"),
-        "should handle unknown command gracefully, got: {}",
-        combined
+        "should handle unknown command gracefully, got: {combined}"
     );
 
     Ok(())
@@ -181,8 +178,7 @@ Echo back: $ARGUMENTS
     let combined = user_texts.join(" ");
     assert!(
         combined.contains("hello world from test"),
-        "arguments should be substituted, got: {}",
-        combined
+        "arguments should be substituted, got: {combined}"
     );
 
     Ok(())
@@ -248,8 +244,7 @@ This is the CODEXPLUS version
     let combined = user_texts.join(" ");
     assert!(
         combined.contains("CODEXPLUS"),
-        ".codexplus should take precedence, got: {}",
-        combined
+        ".codexplus should take precedence, got: {combined}"
     );
 
     Ok(())
