@@ -8,9 +8,12 @@ argument-hint: "[PR number (optional, defaults to current)]"
 
 Execute the full /copilot workflow adapted for Codex CLI. This command processes PR comments, implements fixes, and ensures 100% comment coverage with timing tracking.
 
+## Configuration
+
 Optional behaviors inspired by /copilot:
 - Set `COPILOT_RECENT_LIMIT` (e.g. 30) to only process the most recent N original comments
 - Set `COPILOT_ALLOW_AUTOMERGE=1` to auto-merge when coverage is 100% and PR is mergeable
+- Set `COPILOT_RESPONSE_TAG` to customize the responder tag (default: `[AI Responder codex]`)
 
 ## 🚀 Phase 1: Initial Setup
 
@@ -166,7 +169,8 @@ for i in $(seq 0 $((original_count - 1))); do
   body=$(echo "$comment" | jq -r '.body')
   path=$(echo "$comment" | jq -r '.path // "general"')
   
-  tag="[AI Responder codex]"
+  # Use configurable response tag (default: [AI Responder codex])
+  tag="${COPILOT_RESPONSE_TAG:-[AI Responder codex]}"
   
   # Generate contextual response
   if echo "$body" | grep -iE "security|vulnerability" > /dev/null; then

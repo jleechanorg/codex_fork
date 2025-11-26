@@ -415,6 +415,15 @@ async fn resolve_resume_path(
 }
 
 /// Executes UserPromptSubmit hooks and applies any modifications to the prompt.
+///
+/// Returns the (potentially modified) prompt string.
+///
+/// Hook output protocol:
+/// - Hooks receive JSON input via stdin with the prompt in the "prompt" field
+/// - Hooks can modify the prompt by:
+///   1. Returning JSON with a "prompt" field containing the new prompt
+///   2. Returning empty stdout to pass through unchanged
+/// - Hooks can block execution by returning exit code 2 or JSON with decision="block"
 async fn execute_user_prompt_submit_hook(
     prompt: &str,
     cwd: Option<&Path>,
@@ -477,25 +486,34 @@ async fn execute_user_prompt_submit_hook(
         }
     }
 
-    // Use the stdout from the last hook as the modified prompt if it's non-empty JSON
-    // Otherwise use the original prompt
+    // Extract modified prompt from hook output
+    // Protocol:
+    // 1. If hook returns JSON with "prompt" field, use that as the new prompt
+    // 2. If hook returns empty stdout, use the original prompt unchanged
+    // 3. Non-JSON stdout is ignored (original prompt used) - hooks should return
+    //    structured JSON for prompt modifications
     let modified_prompt = results
         .last()
         .and_then(|r| {
-            if !r.stdout.trim().is_empty() {
-                // Try to parse as JSON first
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&r.stdout) {
-                    // Check if there's a modified prompt in the JSON
+            let stdout_trimmed = r.stdout.trim();
+            if stdout_trimmed.is_empty() {
+                // Empty output = pass through original prompt
+                return None;
+            }
+
+            // Try to parse as JSON
+            match serde_json::from_str::<serde_json::Value>(stdout_trimmed) {
+                Ok(json) => {
+                    // Extract prompt field from JSON
                     json.get("prompt")
                         .and_then(|p| p.as_str())
                         .map(std::string::ToString::to_string)
-                        .or_else(|| Some(r.stdout.clone()))
-                } else {
-                    // If not JSON, use stdout directly
-                    Some(r.stdout.clone())
                 }
-            } else {
-                None
+                Err(_) => {
+                    // Non-JSON output is ignored; use original prompt
+                    tracing::debug!("Hook returned non-JSON output, using original prompt");
+                    None
+                }
             }
         })
         .unwrap_or_else(|| prompt.to_string());

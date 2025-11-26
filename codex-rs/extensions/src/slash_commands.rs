@@ -78,8 +78,34 @@ impl SlashCommand {
     }
 
     /// Substitute arguments into the command content
+    ///
+    /// Supports the following placeholders:
+    /// - `$ARGUMENTS` - All arguments joined by space
+    /// - `$_raw_args` - Same as $ARGUMENTS
+    /// - `$1`, `$2`, ... - Positional arguments
     pub fn substitute_arguments(&self, args: &str) -> String {
-        self.content.replace("$ARGUMENTS", args)
+        let mut result = self.content.clone();
+
+        // Parse positional arguments
+        let positional: Vec<&str> = if args.is_empty() {
+            vec![]
+        } else {
+            args.split_whitespace().collect()
+        };
+
+        // $ARGUMENTS: all positional args joined by space
+        result = result.replace("$ARGUMENTS", args);
+
+        // $_raw_args: same as $ARGUMENTS
+        result = result.replace("$_raw_args", args);
+
+        // $1, $2, ... positional arguments
+        for (i, arg) in positional.iter().enumerate() {
+            let placeholder = format!("${}", i + 1);
+            result = result.replace(&placeholder, arg);
+        }
+
+        result
     }
 }
 
@@ -236,6 +262,45 @@ Hello $ARGUMENTS!
         let cmd = SlashCommand::from_string(content, Path::new("test.md")).unwrap();
         let substituted = cmd.substitute_arguments("World");
         assert_eq!(substituted.trim(), "Hello World!");
+    }
+
+    #[test]
+    fn test_substitute_positional_arguments() {
+        let content = r#"---
+name: test-args
+description: Test argument handling
+---
+
+Arg 1: $1
+Arg 2: $2
+All args: $_raw_args
+"#;
+
+        let cmd = SlashCommand::from_string(content, Path::new("test.md")).unwrap();
+        let substituted = cmd.substitute_arguments("first second third");
+
+        assert!(substituted.contains("Arg 1: first"));
+        assert!(substituted.contains("Arg 2: second"));
+        assert!(substituted.contains("All args: first second third"));
+    }
+
+    #[test]
+    fn test_substitute_empty_arguments() {
+        let content = r#"---
+name: test
+description: Test
+---
+
+Args: $ARGUMENTS
+Arg1: $1
+"#;
+
+        let cmd = SlashCommand::from_string(content, Path::new("test.md")).unwrap();
+        let substituted = cmd.substitute_arguments("");
+
+        assert!(substituted.contains("Args:"));
+        // $1 placeholder remains since no arg provided
+        assert!(substituted.contains("Arg1: $1"));
     }
 
     #[test]

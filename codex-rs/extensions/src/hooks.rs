@@ -280,6 +280,14 @@ impl HookSystem {
     }
 
     /// Determine executable and arguments based on file type
+    ///
+    /// On Unix systems, checks if the file has executable permissions.
+    /// On Windows, files are executed directly without permission checks,
+    /// relying on file extensions (.py, .sh, .js) to determine the interpreter.
+    ///
+    /// Note: On Windows, hooks must either:
+    /// - Have a recognized extension (.py, .sh, .js)
+    /// - Be in a format that Windows can execute directly (e.g., .bat, .exe)
     fn determine_executable(&self, path: &Path) -> (String, Vec<String>) {
         let path_str = path.to_string_lossy().to_string();
 
