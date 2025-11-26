@@ -64,22 +64,62 @@ impl SlashCommand {
     fn extract_frontmatter(content: &str) -> Option<(String, String)> {
         let lines: Vec<&str> = content.lines().collect();
 
-        if lines.is_empty() || lines[0].trim() != "---" {
+        if lines.is_empty() || lines.first()?.trim() != "---" {
             return None;
         }
 
-        // Find the closing ---
-        let end_index = lines.iter().skip(1).position(|line| line.trim() == "---")?;
+        // Find the closing `---` as an absolute index
+        let closing_index = lines
+            .iter()
+            .enumerate()
+            .skip(1)
+            .find(|(_, line)| line.trim() == "---")?
+            .0;
 
-        let frontmatter = lines[1..=end_index].join("\n");
-        let body = lines[end_index + 2..].join("\n");
+        let frontmatter = if closing_index > 1 {
+            lines[1..closing_index].join("\n")
+        } else {
+            String::new()
+        };
+
+        let body_start = closing_index + 1;
+        let body = if body_start < lines.len() {
+            lines[body_start..].join("\n")
+        } else {
+            String::new()
+        };
 
         Some((frontmatter, body))
     }
 
     /// Substitute arguments into the command content
+    /// Supports $ARGUMENTS, $_raw_args, $1..$9, and simple named args key=value
     pub fn substitute_arguments(&self, args: &str) -> String {
-        self.content.replace("$ARGUMENTS", args)
+        let mut out = self.content.clone();
+        let tokens: Vec<&str> = args.split_whitespace().collect();
+        let joined = tokens.join(" ");
+
+        out = out.replace("$ARGUMENTS", &joined);
+        out = out.replace("$_raw_args", &joined);
+
+        for (idx, token) in tokens.iter().take(9).enumerate() {
+            let placeholder = format!("${}", idx + 1);
+            out = out.replace(&placeholder, token);
+        }
+
+        let mut named_args = std::collections::HashMap::new();
+        for token in tokens {
+            if let Some((key, value)) = token.split_once('=') {
+                named_args.insert(key.to_string(), value.to_string());
+            }
+        }
+
+        for (key, value) in named_args {
+            let placeholder = format!("${}", key);
+            out = out.replace(&placeholder, &value);
+        }
+
+        out
     }
 }
 

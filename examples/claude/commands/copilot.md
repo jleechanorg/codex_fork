@@ -166,7 +166,7 @@ for i in $(seq 0 $((original_count - 1))); do
   body=$(echo "$comment" | jq -r '.body')
   path=$(echo "$comment" | jq -r '.path // "general"')
   
-  tag="[AI Responder codex]"
+  tag="${RESPONSE_TAG:-[AI Responder codex]}"
   
   # Generate contextual response
   if echo "$body" | grep -iE "security|vulnerability" > /dev/null; then

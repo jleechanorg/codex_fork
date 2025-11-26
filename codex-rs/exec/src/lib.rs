@@ -115,17 +115,20 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         }
     };
 
-    // Slash command detection and substitution
+    // Execute UserPromptSubmit hooks on the original prompt
+    let prompt = execute_user_prompt_submit_hook(&prompt, cwd.as_deref()).await?;
+
+    // Slash command detection and substitution on the (possibly) modified prompt
     let prompt = match detect_and_substitute_slash_command(&prompt, cwd.as_deref()) {
         Ok(substituted) => substituted,
         Err(e) => {
-            tracing::warn!("Slash command detection failed: {}", e);
+            tracing::warn!(
+                "Slash command detection failed; using original prompt: {}",
+                e
+            );
             prompt // Fall back to original prompt if detection fails
         }
     };
-
-    // Execute UserPromptSubmit hooks
-    let prompt = execute_user_prompt_submit_hook(&prompt, cwd.as_deref()).await?;
 
     let output_schema = load_output_schema(output_schema_path);
 
@@ -432,7 +435,7 @@ async fn execute_user_prompt_submit_hook(
     let settings = match Settings::load(project_dir) {
         Ok(s) => s,
         Err(e) => {
-            tracing::debug!("No hook settings found: {}", e);
+            tracing::warn!("Hook settings failed to load, skipping hooks: {}", e);
             return Ok(prompt.to_string());
         }
     };
@@ -477,30 +480,20 @@ async fn execute_user_prompt_submit_hook(
         }
     }
 
-    // Use the stdout from the last hook as the modified prompt if it's non-empty JSON
-    // Otherwise use the original prompt
-    let modified_prompt = results
-        .last()
-        .and_then(|r| {
-            if !r.stdout.trim().is_empty() {
-                // Try to parse as JSON first
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&r.stdout) {
-                    // Check if there's a modified prompt in the JSON
-                    json.get("prompt")
-                        .and_then(|p| p.as_str())
-                        .map(std::string::ToString::to_string)
-                        .or_else(|| Some(r.stdout.clone()))
-                } else {
-                    // If not JSON, use stdout directly
-                    Some(r.stdout.clone())
-                }
-            } else {
-                None
-            }
-        })
-        .unwrap_or_else(|| prompt.to_string());
+    // Apply prompt modifications sequentially so each hook can build on previous changes.
+    let mut updated_prompt = prompt.to_string();
+    for result in &results {
+        if let Some(new_prompt) = result
+            .parsed_output
+            .as_ref()
+            .and_then(|o| o.prompt.as_deref())
+            .map(ToString::to_string)
+        {
+            updated_prompt = new_prompt;
+        }
+    }
 
-    Ok(modified_prompt)
+    Ok(updated_prompt)
 }
 
 /// Detects slash commands in the prompt and substitutes them with their content.

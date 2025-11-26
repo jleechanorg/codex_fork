@@ -895,7 +895,7 @@ git push -u origin claude/copy-open-source-code-01AEYQXhZaSmS1eXZenMnRhu
 
 Each commit should follow this format:
 
-```
+```text
 <type>: <concise description>
 
 <detailed description of changes>

@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Stdio;
+use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::time::Duration;
@@ -80,6 +81,8 @@ pub struct HookOutput {
     pub reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hook_specific_output: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
 }
 
 /// Result of hook execution
@@ -156,6 +159,7 @@ impl HookSystem {
 
         let mut results = Vec::new();
         let mut blocked = false;
+        let mut current_input = input;
 
         for entry in hooks {
             if blocked {
@@ -168,13 +172,25 @@ impl HookSystem {
                 }
 
                 let result = self
-                    .execute_command_hook(&hook_config.command, &input, hook_config.timeout)
+                    .execute_command_hook(&hook_config.command, &current_input, hook_config.timeout)
                     .await?;
 
-                results.push(result.clone());
+                if let Some(prompt) = result
+                    .parsed_output
+                    .as_ref()
+                    .and_then(|o| o.prompt.as_deref())
+                    .map(ToString::to_string)
+                {
+                    current_input
+                        .extra
+                        .insert("prompt".to_string(), serde_json::Value::String(prompt));
+                }
+
+                let is_blocking = result.is_blocking();
+                results.push(result);
 
                 // Stop on first blocking hook
-                if result.is_blocking() {
+                if is_blocking {
                     blocked = true;
                     break;
                 }
@@ -220,20 +236,52 @@ impl HookSystem {
             drop(stdin);
         }
 
-        // Wait with timeout
-        let timeout = Duration::from_secs(timeout_secs);
-        let output = tokio::time::timeout(timeout, child.wait_with_output())
-            .await
-            .map_err(|_| ExtensionError::HookTimeout {
-                timeout_ms: timeout_secs * 1000,
-            })?
-            .map_err(|e| {
-                ExtensionError::HookExecutionFailed(format!("Failed to wait for process: {}", e))
-            })?;
+        // Read stdout/stderr concurrently while waiting for completion
+        let mut stdout_handle = None;
+        if let Some(mut stdout_pipe) = child.stdout.take() {
+            stdout_handle = Some(tokio::spawn(async move {
+                let mut buf = Vec::new();
+                let _ = stdout_pipe.read_to_end(&mut buf).await;
+                String::from_utf8_lossy(&buf).to_string()
+            }));
+        }
 
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        let exit_code = output.status.code().unwrap_or(1);
+        let mut stderr_handle = None;
+        if let Some(mut stderr_pipe) = child.stderr.take() {
+            stderr_handle = Some(tokio::spawn(async move {
+                let mut buf = Vec::new();
+                let _ = stderr_pipe.read_to_end(&mut buf).await;
+                String::from_utf8_lossy(&buf).to_string()
+            }));
+        }
+
+        // Wait with timeout and clean up on expiry to avoid leaking child processes
+        let timeout = Duration::from_secs(timeout_secs);
+        let wait_fut = child.wait();
+        let status = match tokio::time::timeout(timeout, wait_fut).await {
+            Ok(res) => res.map_err(|e| {
+                ExtensionError::HookExecutionFailed(format!("Failed to wait for process: {}", e))
+            })?,
+            Err(_) => {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                return Err(ExtensionError::HookTimeout {
+                    timeout_ms: timeout_secs * 1000,
+                });
+            }
+        };
+
+        let stdout = match stdout_handle {
+            Some(handle) => handle.await.unwrap_or_default(),
+            None => String::new(),
+        };
+
+        let stderr = match stderr_handle {
+            Some(handle) => handle.await.unwrap_or_default(),
+            None => String::new(),
+        };
+
+        let exit_code = status.code().unwrap_or(1);
 
         // Try to parse JSON output
         let parsed_output = if !stdout.trim().is_empty() {
@@ -258,7 +306,7 @@ impl HookSystem {
         }
 
         // If it contains path separators, resolve relative to project dir
-        if command.contains(std::path::MAIN_SEPARATOR) {
+        if command.contains('/') || command.contains('\\') {
             return Ok(self.project_dir.join(command));
         }
 
@@ -300,10 +348,29 @@ impl HookSystem {
 
         // Check extension
         if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-            match ext {
+            let ext_lc = ext.to_ascii_lowercase();
+            match ext_lc.as_str() {
                 "py" => return ("python3".to_string(), vec![path_str]),
                 "sh" => return ("bash".to_string(), vec![path_str]),
                 "js" => return ("node".to_string(), vec![path_str]),
+                _ => {}
+            }
+
+            #[cfg(windows)]
+            match ext_lc.as_str() {
+                "bat" | "cmd" => return ("cmd.exe".to_string(), vec!["/C".into(), path_str]),
+                "ps1" => {
+                    return (
+                        "powershell.exe".to_string(),
+                        vec![
+                            "-NoProfile".into(),
+                            "-ExecutionPolicy".into(),
+                            "Bypass".into(),
+                            "-File".into(),
+                            path_str,
+                        ],
+                    );
+                }
                 _ => {}
             }
         }
@@ -347,6 +414,7 @@ mod tests {
                 decision: Some("block".to_string()),
                 reason: Some("Test block".to_string()),
                 hook_specific_output: None,
+                prompt: None,
             }),
         };
         assert!(result2.is_blocking());

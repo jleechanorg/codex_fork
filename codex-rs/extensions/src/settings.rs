@@ -1,9 +1,11 @@
 //! Settings management for extensions
 //!
-//! Parses and manages settings.json configuration files with precedence:
-//! 1. .codexplus/settings.json (highest priority)
-//! 2. .claude/settings.json (project level)
-//! 3. ~/.claude/settings.json (user level)
+//! Parses and manages settings.json configuration files with precedence and
+//! merge semantics:
+//! - Hooks are merged from lowest to highest priority (user ~/.claude,
+//!   project .claude, then .codexplus). All hooks run in that order and later
+//!   hooks may block.
+//! - `status_line` is overridden by higher-priority files (.codexplus wins).
 
 use crate::error::ExtensionError;
 use crate::error::Result;

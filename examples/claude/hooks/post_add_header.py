@@ -1,22 +1,42 @@
 #!/usr/bin/env python3
 """
-Hook: add-header
-Type: post-output
-Priority: 50
-Enabled: true
+Hook Metadata:
+name: post-add-header
+type: PostOutput
+priority: 50
+enabled: true
 """
-from codex_plus.hooks import Hook
-from fastapi.responses import Response
+import json
+import logging
+import sys
 
-class AddHeader(Hook):
-    name = "add-header"
-    async def post_output(self, response):
-        # only add on non-streaming responses
-        try:
-            response.headers['X-Hooked'] = '1'
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.debug(f"Failed to add header to response: {e}")
-        return response
-hook = AddHeader('add-header', {'type':'post-output','priority':50,'enabled':True})
+
+def main() -> int:
+    try:
+        payload = json.load(sys.stdin)
+    except Exception:
+        payload = {}
+
+    output = {
+        "decision": "allow",
+        "hookSpecificOutput": {"x_hooked": "1"},
+    }
+
+    # This example does not modify streaming responses; add logic here if needed.
+    try:
+        print(json.dumps(output))
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger(__name__).debug("Hook failed: %s", exc)
+        print(json.dumps({"decision": "allow"}))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger(__name__).debug("Hook failed: %s", exc)
+        print(json.dumps({"decision": "allow"}))
+        sys.exit(0)

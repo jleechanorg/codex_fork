@@ -25,7 +25,7 @@ To use these examples:
 
 ## Directory Structure
 
-```
+```text
 .claude/
 ├── commands/           # Slash command definitions (markdown files)
 ├── hooks/              # Hook scripts (executable files)

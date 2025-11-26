@@ -6,10 +6,36 @@ type: UserPromptSubmit
 priority: 50
 enabled: true
 """
-import json, sys
+import json
+import sys
+
+
+def main() -> int:
+    try:
+        payload = json.load(sys.stdin)
+    except Exception:
+        payload = {}
+
+    original_prompt = ""
+    extra = payload.get("extra")
+    if isinstance(extra, dict):
+        original_prompt = extra.get("prompt", "")
+
+    output = {
+        "decision": "allow",
+        "hookSpecificOutput": {
+            "hookEventName": payload.get("hook_event_name", ""),
+            "additionalContext": "CTX-123",
+        },
+    }
+
+    # Uncomment to demonstrate prompt modification
+    # if original_prompt:
+    #     output["prompt"] = f"[CTX] {original_prompt}"
+
+    print(json.dumps(output))
+    return 0
+
 
 if __name__ == "__main__":
-    print(json.dumps({
-      "hookSpecificOutput": {"hookEventName":"UserPromptSubmit", "additionalContext": "CTX-123"}
-    }))
-    sys.exit(0)
+    sys.exit(main())

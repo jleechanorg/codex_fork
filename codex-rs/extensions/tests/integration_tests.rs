@@ -8,9 +8,11 @@
 use codex_extensions::HookSystem;
 use codex_extensions::Settings;
 use codex_extensions::SlashCommandRegistry;
+use std::env;
 use tempfile::TempDir;
 
 #[test]
+#[cfg(unix)]
 fn test_full_extension_system_integration() {
     // Create a temporary project directory
     let project = TempDir::new().unwrap();
@@ -77,10 +79,21 @@ cat | jq -c '.session_id'
     )
     .unwrap();
 
+    // Make test hermetic to user HOME
+    let temp_home = project.path().join("fake_home");
+    std::fs::create_dir_all(&temp_home).unwrap();
+    unsafe {
+        env::set_var("HOME", &temp_home);
+    }
+
     // Test loading everything
     let settings = Settings::load(Some(project.path())).unwrap();
     let registry = SlashCommandRegistry::load(Some(project.path())).unwrap();
     let _hook_system = HookSystem::new(Some(project.path())).unwrap();
+
+    unsafe {
+        env::remove_var("HOME");
+    }
 
     // Verify settings loaded
     assert!(settings.hooks.contains_key("UserPromptSubmit"));
@@ -112,7 +125,7 @@ async fn test_hook_execution_integration() {
         &hook_script,
         r#"#!/bin/bash
 # Read input and add context
-input=$(cat)
+cat >/dev/null
 echo '{"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": "Test context"}}'
 exit 0
 "#,

@@ -64,7 +64,7 @@ All workspace crates compile successfully:
 **Result:** PASS
 
 Generated lib.rs matches checked-in version:
-```
+```text
 lib.rs matches checked-in version
 ```
 
