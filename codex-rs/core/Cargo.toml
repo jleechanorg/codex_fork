@@ -60,7 +60,6 @@ shlex = { workspace = true }
 similar = { workspace = true }
 strum_macros = { workspace = true }
 tempfile = { workspace = true }
-test-case = "3.3.1"
 test-log = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true, features = [
@@ -119,6 +118,7 @@ tokio-test = { workspace = true }
 tracing-test = { workspace = true, features = ["no-env-filter"] }
 walkdir = { workspace = true }
 wiremock = { workspace = true }
+test-case = "3.3.1"
 
 [package.metadata.cargo-shear]
 ignored = ["openssl-sys"]
