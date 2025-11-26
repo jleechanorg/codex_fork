@@ -6,7 +6,6 @@ Priority: 50
 Enabled: true
 """
 from codex_plus.hooks import Hook
-from fastapi.responses import Response
 
 class AddHeader(Hook):
     name = "add-header"

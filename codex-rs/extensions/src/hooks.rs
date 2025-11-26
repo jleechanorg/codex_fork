@@ -280,10 +280,27 @@ impl HookSystem {
     }
 
     /// Determine executable and arguments based on file type
+    ///
+    /// # Platform Behavior
+    ///
+    /// On Unix systems, if a file has the executable bit set, it will be executed directly.
+    /// Otherwise, the interpreter is determined by file extension.
+    ///
+    /// On Windows, files don't have Unix-style executable bits. Execution depends on:
+    /// - File extension association (e.g., `.exe`, `.bat`, `.cmd` execute directly)
+    /// - Script files (`.py`, `.sh`, `.js`) are run via their interpreters
+    /// - Other files are attempted to be executed directly (may fail if not recognized)
+    ///
+    /// # Supported Extensions
+    ///
+    /// - `.py` → Runs with `python3`
+    /// - `.sh` → Runs with `bash`
+    /// - `.js` → Runs with `node`
+    /// - `.exe`, `.bat`, `.cmd` (Windows) → Execute directly
     fn determine_executable(&self, path: &Path) -> (String, Vec<String>) {
         let path_str = path.to_string_lossy().to_string();
 
-        // Check if executable
+        // Check if executable (Unix only)
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -298,17 +315,21 @@ impl HookSystem {
             }
         }
 
-        // Check extension
+        // Check extension for interpreter selection
         if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
             match ext {
                 "py" => return ("python3".to_string(), vec![path_str]),
                 "sh" => return ("bash".to_string(), vec![path_str]),
                 "js" => return ("node".to_string(), vec![path_str]),
+                // On Windows, these execute directly via shell association
+                #[cfg(windows)]
+                "exe" | "bat" | "cmd" => return (path_str, vec![]),
                 _ => {}
             }
         }
 
         // Default: try to execute directly
+        // On Windows, this relies on shell file associations
         (path_str, vec![])
     }
 }

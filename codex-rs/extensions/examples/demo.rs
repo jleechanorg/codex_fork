@@ -97,14 +97,26 @@ async fn main() {
     println!();
 
     // Initialize hook system
-    // Note: HookSystem expects a project directory that contains .claude/
-    // Since our examples/claude IS the .claude directory, we pass its parent
+    // Note: HookSystem::new() looks for .claude/ or .codexplus/ directories within the project.
+    // Since examples/claude IS the configuration directory (not a project with .claude/ inside),
+    // we demonstrate two scenarios:
+    // 1. The "no hooks found" case (using the example directory directly)
+    // 2. What would happen with a properly configured project
     println!("\n4. Initializing hook system...");
-    // For demo purposes, we manually load settings from examples/claude/settings.json
-    match HookSystem::new(None) {
-        // Use None so it won't find settings, we'll note this
+    println!(
+        "   Note: The demo directory structure (examples/claude/) contains configuration files"
+    );
+    println!("   directly, rather than being a project with .claude/ subdirectory.");
+    println!("   In a real project, your structure would be: project/.claude/settings.json");
+    println!();
+
+    // First, demonstrate the "no hooks configured" case
+    // This is what happens when HookSystem can't find .claude/ in the specified directory
+    match HookSystem::new(Some(&project_dir)) {
         Ok(hook_system) => {
-            println!("   ✓ Hook system initialized");
+            println!(
+                "   ✓ Hook system initialized (no hooks will be found in this demo structure)"
+            );
 
             println!();
             println!("5. Testing hook execution (UserPromptSubmit):");
