@@ -4,6 +4,15 @@
 //! 1. .codexplus/settings.json (highest priority)
 //! 2. .claude/settings.json (project level)
 //! 3. ~/.claude/settings.json (user level)
+//!
+//! ## Merge Semantics
+//!
+//! - **Hooks**: Concatenated from all sources. Hooks defined in multiple
+//!   locations all execute in order (lower to higher precedence). This allows
+//!   global hooks in ~/.claude/ to run alongside project-specific hooks.
+//!
+//! - **Status line**: Replaced (higher precedence wins). Only the status_line
+//!   configuration from the highest precedence source is used.
 
 use crate::error::ExtensionError;
 use crate::error::Result;
@@ -97,15 +106,22 @@ impl Settings {
         })
     }
 
-    /// Merge another settings instance into this one
-    /// Later settings take precedence
+    /// Merge another settings instance into this one.
+    ///
+    /// Merge semantics:
+    /// - **Hooks**: Concatenated from all sources. Hooks from all locations
+    ///   (~/.claude/, .claude/, .codexplus/) are combined and all execute in
+    ///   the order they were loaded (lower to higher precedence).
+    /// - **Status line**: Replaced (higher precedence wins). The status_line
+    ///   from .codexplus/ overrides .claude/ which overrides ~/.claude/.
     fn merge(&mut self, other: Settings) {
         // Merge hooks - concatenate arrays for same event
+        // All hooks from all sources execute, in order from lower to higher precedence
         for (event, entries) in other.hooks {
             self.hooks.entry(event).or_default().extend(entries);
         }
 
-        // Status line: replace if present
+        // Status line: replace if present (higher precedence wins)
         if other.status_line.is_some() {
             self.status_line = other.status_line;
         }

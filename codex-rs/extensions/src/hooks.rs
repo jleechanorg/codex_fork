@@ -280,6 +280,10 @@ impl HookSystem {
     }
 
     /// Determine executable and arguments based on file type
+    ///
+    /// On Unix, checks if the file has executable permission bits set.
+    /// On Windows, recognizes executable extensions (.exe, .bat, .cmd, .ps1)
+    /// and script extensions that need interpreters.
     fn determine_executable(&self, path: &Path) -> (String, Vec<String>) {
         let path_str = path.to_string_lossy().to_string();
 
@@ -298,17 +302,35 @@ impl HookSystem {
             }
         }
 
-        // Check extension
+        // Check extension (works on all platforms)
         if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-            match ext {
+            let ext_lower = ext.to_lowercase();
+            match ext_lower.as_str() {
+                // Script extensions - need interpreters
                 "py" => return ("python3".to_string(), vec![path_str]),
                 "sh" => return ("bash".to_string(), vec![path_str]),
                 "js" => return ("node".to_string(), vec![path_str]),
+                // Windows-specific executable extensions
+                #[cfg(windows)]
+                "exe" | "bat" | "cmd" => return (path_str, vec![]),
+                #[cfg(windows)]
+                "ps1" => {
+                    return (
+                        "powershell".to_string(),
+                        vec![
+                            "-ExecutionPolicy".to_string(),
+                            "Bypass".to_string(),
+                            "-File".to_string(),
+                            path_str,
+                        ],
+                    );
+                }
                 _ => {}
             }
         }
 
         // Default: try to execute directly
+        // On Windows, files without recognized extensions may fail to execute
         (path_str, vec![])
     }
 }
