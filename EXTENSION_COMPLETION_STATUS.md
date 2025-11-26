@@ -9,18 +9,21 @@ The extension system infrastructure for slash commands and hooks has been succes
 ### 1. Core Extension System (`codex-rs/extensions/`)
 
 **Module: `src/settings.rs`** (7 unit tests passing)
+
 - Parses `settings.json` configuration files
 - Implements precedence: `.codexplus/ > .claude/ > ~/.claude/`
 - Supports hook configurations with matchers and timeouts
 - Supports status line configuration
 
 **Module: `src/slash_commands.rs`** (9 unit tests passing)
+
 - Parses markdown files with YAML frontmatter
 - Detects `/command args` syntax in user input
 - Substitutes `$ARGUMENTS` placeholder with actual arguments
 - Loads commands from configured directories
 
 **Module: `src/hooks.rs`** (6 unit tests passing)
+
 - Executes lifecycle hooks at specific events:
   - UserPromptSubmit
   - PreToolUse / PostToolUse
@@ -32,12 +35,14 @@ The extension system infrastructure for slash commands and hooks has been succes
 - Auto-detects interpreters (.py → python3, .sh → bash, .js → node)
 
 **Module: `src/error.rs`**
+
 - Comprehensive error types using `thiserror`
 - Covers all extension failure scenarios
 
 ### 2. Testing (29 tests total, all passing)
 
 **Unit Tests (22 tests)**
+
 - Settings loading and precedence
 - Command parsing and detection
 - Hook event conversion
@@ -47,6 +52,7 @@ The extension system infrastructure for slash commands and hooks has been succes
 
 **Integration Tests (7 tests)**
 Located in `codex-rs/extensions/tests/integration_tests.rs`:
+
 1. `test_full_extension_system_integration` - Loads settings, commands, and hooks together
 2. `test_hook_execution_integration` - Tests JSON I/O protocol
 3. `test_hook_blocking_integration` - Verifies blocking hooks work
@@ -60,6 +66,7 @@ Located in `codex-rs/extensions/tests/integration_tests.rs`:
 **Location:** `codex-rs/extensions/examples/demo.rs`
 
 Demonstrates:
+
 - Loading settings from `examples/claude/settings.json`
 - Loading 7 slash commands from `examples/claude/commands/`
 - Command detection and argument substitution
@@ -70,6 +77,7 @@ Run with: `cargo run --example demo` (from `codex-rs` directory)
 ### 4. Example Files (Ported from codex_plus)
 
 **Commands:** `examples/claude/commands/`
+
 - `/hello` - Simple test command
 - `/echo` - Echo arguments back
 - `/copilot` - Fast autonomous PR processing
@@ -79,11 +87,13 @@ Run with: `cargo run --example demo` (from `codex-rs` directory)
 - `/test-args` - Test argument handling
 
 **Hooks:** `examples/claude/hooks/`
+
 - `add_context.py` - Adds context to user prompts
 - `post_add_header.py` - Adds headers to tool outputs
 - `shared_utils.py` - Shared utilities for hooks
 
 **Configuration:** `examples/claude/settings.json`
+
 - Example hook configuration
 - Status line configuration
 
@@ -125,6 +135,7 @@ To actually use slash commands with `codex exec --yolo "/hello World"`, the foll
    - Add `SlashCommandRegistry::detect_command()` to check for `/` prefix
    - Substitute command content before sending to LLM
    - Example:
+
    ```rust
    use codex_extensions::SlashCommandRegistry;
 
@@ -147,6 +158,7 @@ To actually use slash commands with `codex exec --yolo "/hello World"`, the foll
    - **PreToolUse/PostToolUse**: In tool execution pipeline
    - **SessionEnd**: In cleanup/shutdown code
    - Example:
+
    ```rust
    use codex_extensions::{HookSystem, HookEvent, HookInput};
 
@@ -214,6 +226,7 @@ Even without CLI integration, the extension system can be used:
 The extension system infrastructure is **complete, tested, and production-ready**. It successfully implements all the functionality from `jleechanorg/codex_plus` (slash commands and hooks) in native Rust.
 
 The 29/29 passing tests demonstrate that:
+
 - ✅ Settings load with correct precedence
 - ✅ Slash commands parse and substitute arguments
 - ✅ Hooks execute with JSON I/O protocol

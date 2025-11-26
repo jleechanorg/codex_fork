@@ -50,6 +50,7 @@ This document describes the technical design for integrating OpenAI's Codex CLI 
 ### 1. Slash Command System
 
 #### Purpose
+
 Provide a command-line interface extension allowing users to execute custom commands within the Codex CLI environment.
 
 #### Architecture
@@ -84,17 +85,20 @@ Provide a command-line interface extension allowing users to execute custom comm
 **Location**: `codex-rs/extensions/slash-commands/` (new directory)
 
 **Core Components**:
+
 1. `command_registry.rs` - Central registry for all slash commands
 2. `command_parser.rs` - Parses slash command syntax
 3. `command_executor.rs` - Executes slash commands
 4. `builtin_commands/` - Directory for built-in slash commands from codex_plus
 
 **Integration Points**:
+
 - Hook into Codex CLI input processing
 - Integrate with existing command execution pipeline
 - Leverage existing tool system where applicable
 
 **Configuration**:
+
 ```toml
 # ~/.codex/config.toml
 [slash_commands]
@@ -135,6 +139,7 @@ impl CommandRegistry {
 ### 2. Hook System
 
 #### Purpose
+
 Provide event-driven extensibility allowing users to execute custom logic at specific points in the Codex CLI lifecycle.
 
 #### Architecture
@@ -173,17 +178,20 @@ Provide event-driven extensibility allowing users to execute custom logic at spe
 **Location**: `codex-rs/extensions/hooks/` (new directory)
 
 **Core Components**:
+
 1. `hook_manager.rs` - Central manager for all hooks
 2. `hook_executor.rs` - Executes hooks safely
 3. `hook_points.rs` - Defines all available hook points
 4. `builtin_hooks/` - Directory for built-in hooks from codex_plus
 
 **Integration Points**:
+
 - Instrument key points in Codex CLI lifecycle
 - Integrate with existing event system (if any)
 - Provide context information to hooks
 
 **Configuration**:
+
 ```toml
 # ~/.codex/config.toml
 [hooks]
@@ -248,6 +256,7 @@ impl HookManager {
 ### 3. Extension Integration Layer
 
 #### Purpose
+
 Provide seamless integration between OpenAI Codex core and codex_plus extensions without modifying core code.
 
 #### Architecture
@@ -284,6 +293,7 @@ Provide seamless integration between OpenAI Codex core and codex_plus extensions
 **Location**: `codex-rs/extensions/` (new directory)
 
 **Core Components**:
+
 1. `mod.rs` - Extension module entry point
 2. `manager.rs` - Extension manager
 3. `loader.rs` - Dynamic extension loading
@@ -291,6 +301,7 @@ Provide seamless integration between OpenAI Codex core and codex_plus extensions
 5. `hooks/` - Hook system
 
 **Integration Approach**:
+
 - Minimal changes to core Codex files
 - Use dependency injection where possible
 - Leverage existing plugin patterns in Rust codebase
@@ -506,18 +517,21 @@ cargo test -p codex-hooks
 ## Security Considerations
 
 ### Slash Commands
+
 - Validate all user input
 - Sanitize command arguments
 - Restrict file system access
 - Implement command allowlists/denylists
 
 ### Hooks
+
 - Execute hooks in sandboxed environment
 - Implement timeout mechanisms
 - Validate hook scripts before execution
 - Provide security audit logs
 
 ### General
+
 - No sensitive data in logs
 - Secure configuration file permissions
 - Validate all extension code
@@ -526,16 +540,19 @@ cargo test -p codex-hooks
 ## Performance Considerations
 
 ### Lazy Loading
+
 - Load extensions only when needed
 - Cache compiled extensions
 - Minimize startup time impact
 
 ### Async Execution
+
 - Execute hooks asynchronously where possible
 - Use parallel execution for independent hooks
 - Implement proper timeout handling
 
 ### Resource Management
+
 - Limit hook execution time
 - Monitor memory usage
 - Implement proper cleanup
@@ -543,12 +560,14 @@ cargo test -p codex-hooks
 ## Backward Compatibility
 
 ### With OpenAI Codex
+
 - All existing functionality must work unchanged
 - Existing configurations must be compatible
 - API surface remains stable
 - Users can disable extensions entirely
 
 ### With codex_plus
+
 - Adapt features to fit new architecture
 - May require API changes from original codex_plus
 - Focus on functionality preservation over API preservation
@@ -556,11 +575,13 @@ cargo test -p codex-hooks
 ## Migration Path
 
 ### For OpenAI Codex Users
+
 1. Install codex_fork (same as OpenAI Codex)
 2. Optionally enable extensions in config
 3. No breaking changes to existing workflows
 
 ### For codex_plus Users
+
 1. Install codex_fork
 2. Configure extensions (slash commands, hooks)
 3. Migrate custom commands/hooks to new format
@@ -569,11 +590,13 @@ cargo test -p codex-hooks
 ## Future Extensibility
 
 ### Plugin System
+
 - Design allows for third-party plugins
 - Clear plugin API and interfaces
 - Plugin marketplace potential
 
 ### Additional Extensions
+
 - Easy to add new extension types
 - Follows established patterns
 - Well-documented extension API
@@ -581,11 +604,13 @@ cargo test -p codex-hooks
 ## Maintenance Strategy
 
 ### Upstream Sync
+
 - Regular pulls from OpenAI Codex upstream
 - Automated testing on upstream changes
 - Clear separation allows easier merges
 
 ### Version Management
+
 - Track OpenAI Codex version
 - Track codex_plus features version
 - Semantic versioning for fork
@@ -593,6 +618,7 @@ cargo test -p codex-hooks
 ## Documentation Requirements
 
 ### User Documentation
+
 - Installation guide
 - Slash command reference
 - Hook system guide
@@ -600,6 +626,7 @@ cargo test -p codex-hooks
 - Migration guides
 
 ### Developer Documentation
+
 - Architecture overview
 - Extension development guide
 - API reference
@@ -617,12 +644,14 @@ cargo test -p codex-hooks
 ## Appendices
 
 ### Appendix A: Technology Stack
+
 - **Language**: Rust (codex-rs), TypeScript (codex-cli)
 - **Build Tools**: Cargo, pnpm
 - **Testing**: Rust testing framework, Jest/Vitest
 - **Configuration**: TOML format
 
 ### Appendix B: Glossary
+
 - **OpenAI Codex**: Upstream open-source project
 - **codex_plus**: Private repository with enhancements
 - **codex_fork**: This integrated fork repository
@@ -630,5 +659,6 @@ cargo test -p codex-hooks
 - **Hooks**: Event-driven extension points
 
 ### Appendix C: References
+
 - OpenAI Codex: https://github.com/openai/codex
 - Apache-2.0 License: https://www.apache.org/licenses/LICENSE-2.0

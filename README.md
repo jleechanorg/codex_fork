@@ -70,7 +70,9 @@ Codex can access MCP servers. To configure them, refer to the [config docs](./do
 **New!** This fork includes an extension system that adds powerful customization capabilities through slash commands and lifecycle hooks.
 
 #### Slash Commands
+
 Create custom commands using markdown files:
+
 ```bash
 # Try the example commands
 codex "/hello World"
@@ -78,6 +80,7 @@ codex "/echo test message"
 ```
 
 Get started:
+
 ```bash
 # Copy examples to your home directory
 cp -r examples/claude ~/.claude
@@ -92,13 +95,17 @@ Do something amazing with: $ARGUMENTS' > ~/.claude/commands/mycommand.md
 ```
 
 #### Hooks
+
 Run custom scripts at key points in the CLI lifecycle (UserPromptSubmit, PreToolUse, SessionStart, etc.):
+
 ```json
 {
   "hooks": {
-    "UserPromptSubmit": [{
-      "hooks": [{"type": "command", "command": "validate.sh", "timeout": 5}]
-    }]
+    "UserPromptSubmit": [
+      {
+        "hooks": [{ "type": "command", "command": "validate.sh", "timeout": 5 }]
+      }
+    ]
   }
 }
 ```

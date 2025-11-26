@@ -9,6 +9,7 @@ After analyzing both the OpenAI Codex repository and the codex_plus repository, 
 **IMPORTANT**: codex_plus is NOT a fork or extension of OpenAI Codex - it's a **Python-based HTTP proxy** that wraps the Codex CLI to add features.
 
 ### codex_plus Architecture
+
 - **Type**: Python HTTP proxy (FastAPI)
 - **Purpose**: Intercepts requests from Codex CLI → ChatGPT backend
 - **Technology**: Python, FastAPI, curl_cffi for Chrome impersonation
@@ -16,6 +17,7 @@ After analyzing both the OpenAI Codex repository and the codex_plus repository, 
 - **Integration**: Via `OPENAI_BASE_URL=http://localhost:10000` environment variable
 
 ### OpenAI Codex (Current codex_fork) Architecture
+
 - **Type**: Native Rust CLI application
 - **Purpose**: Direct interaction with ChatGPT backend
 - **Technology**: Rust, Tokio for async runtime
@@ -25,6 +27,7 @@ After analyzing both the OpenAI Codex repository and the codex_plus repository, 
 ## Current Repository State
 
 ### codex_fork Status
+
 ```
 Current branch: claude/copy-open-source-code-01AEYQXhZaSmS1eXZenMnRhu
 Latest OpenAI commit: f828cd2 (fix: resolve Windows MCP server execution)
@@ -36,6 +39,7 @@ Additional commits:
 **Conclusion**: The current codex_fork already contains the OpenAI Codex codebase. No merge from upstream is needed.
 
 ### OpenAI Codex (Upstream) Status
+
 ```
 Latest commit: f828cd2 (same as codex_fork base)
 Version: codex-rs-2925136536b06a324551627468d17e959afa18d4-1-rust-v0.2.0-alpha.2-1520-gf828cd28
@@ -46,12 +50,14 @@ Version: codex-rs-2925136536b06a324551627468d17e959afa18d4-1-rust-v0.2.0-alpha.2
 ### 1. Slash Command System
 
 **Implementation in codex_plus**:
+
 - Markdown files in `.codexplus/commands/` or `.claude/commands/`
 - YAML frontmatter with metadata (name, description)
 - LLM execution via middleware that injects instructions
 - Argument substitution with `$ARGUMENTS` placeholder
 
 **Example Command Structure**:
+
 ```markdown
 ---
 name: hello
@@ -71,6 +77,7 @@ Arguments: $ARGUMENTS (optional name to greet)
 ```
 
 **Available Commands**:
+
 1. `hello.md` - Simple greeting command
 2. `echo.md` - Echo test command
 3. `copilot.md` - Autonomous PR processing (advanced)
@@ -81,6 +88,7 @@ Arguments: $ARGUMENTS (optional name to greet)
 8. `test-args.md` - Argument testing
 
 **Adaptation Strategy**:
+
 - Parse `.claude/commands/*.md` files at runtime
 - Detect `/command` syntax in user input
 - Inject command instructions into LLM prompt
@@ -89,6 +97,7 @@ Arguments: $ARGUMENTS (optional name to greet)
 ### 2. Hook System
 
 **Implementation in codex_plus**:
+
 - Python scripts in `.codexplus/hooks/` or `.claude/hooks/`
 - Two formats:
   1. Standalone executables with JSON stdin/stdout
@@ -97,6 +106,7 @@ Arguments: $ARGUMENTS (optional name to greet)
 - Hook lifecycle events
 
 **Hook Types**:
+
 1. **UserPromptSubmit** - Process input before sending to API
 2. **PreToolUse** - Process before tool execution
 3. **PostToolUse** - Process after tool execution
@@ -108,6 +118,7 @@ Arguments: $ARGUMENTS (optional name to greet)
 9. **StatusLine** - Generate status line for display
 
 **Example Hook Structure**:
+
 ```python
 #!/usr/bin/env python3
 """
@@ -130,11 +141,13 @@ if __name__ == "__main__":
 ```
 
 **Available Hooks**:
+
 1. `add_context.py` - Add context to user prompt (UserPromptSubmit)
 2. `post_add_header.py` - Add header to output (post-output)
 3. `shared_utils.py` - Shared utilities
 
 **Hook Configuration (settings.json)**:
+
 ```json
 {
   "hooks": {
@@ -161,6 +174,7 @@ if __name__ == "__main__":
 ```
 
 **Adaptation Strategy**:
+
 - Execute hooks as subprocess commands with JSON I/O
 - Support `.claude/settings.json` for configuration
 - Implement hook points in Rust CLI lifecycle
@@ -170,21 +184,25 @@ if __name__ == "__main__":
 ### 3. Additional Features
 
 **Status Line Middleware**:
+
 - Git status information injection
 - Configurable via settings.json
 - Async subprocess execution
 - Timeout handling (2 seconds default)
 
 **Request Logging**:
+
 - Branch-specific logging
 - Async logging to `/tmp/codex_plus/`
 - Request/response debugging
 
 **Chat Colorizer**:
+
 - ANSI color support for terminal output
 - Syntax highlighting
 
 **Port Guard**:
+
 - Ensures single proxy instance
 - PID-based daemon control
 
@@ -240,6 +258,7 @@ Instead of copying Python code, we'll:
 ## Directory Structure Comparison
 
 ### codex_plus Structure
+
 ```
 codex_plus/
 ├── src/codex_plus/              # Python package
@@ -261,6 +280,7 @@ codex_plus/
 ```
 
 ### Proposed codex_fork Structure (After Integration)
+
 ```
 codex_fork/
 ├── codex-rs/                    # Rust workspace
@@ -296,19 +316,20 @@ codex_fork/
 
 ### codex_plus → codex_fork
 
-| Feature | codex_plus | codex_fork (Target) |
-|---------|-----------|---------------------|
-| Language | Python 3.x | Rust |
-| Async Runtime | asyncio | Tokio |
-| HTTP Client | curl_cffi | reqwest |
-| Configuration | JSON (manual parse) | serde_json |
-| Process Execution | asyncio.subprocess | tokio::process |
-| YAML Parsing | PyYAML | serde_yaml |
-| Markdown Parsing | Manual | pulldown-cmark |
+| Feature           | codex_plus          | codex_fork (Target) |
+| ----------------- | ------------------- | ------------------- |
+| Language          | Python 3.x          | Rust                |
+| Async Runtime     | asyncio             | Tokio               |
+| HTTP Client       | curl_cffi           | reqwest             |
+| Configuration     | JSON (manual parse) | serde_json          |
+| Process Execution | asyncio.subprocess  | tokio::process      |
+| YAML Parsing      | PyYAML              | serde_yaml          |
+| Markdown Parsing  | Manual              | pulldown-cmark      |
 
 ## Dependencies to Add
 
 ### Rust Dependencies (Cargo.toml)
+
 ```toml
 [dependencies]
 serde_yaml = "0.9"           # YAML frontmatter parsing
@@ -319,6 +340,7 @@ tokio = { version = "1", features = ["process", "time"] }  # Process execution
 ## Feature Parity Goals
 
 ### Slash Commands
+
 - [x] Markdown file format support
 - [ ] YAML frontmatter parsing
 - [ ] Command detection in user input (`/command args`)
@@ -328,6 +350,7 @@ tokio = { version = "1", features = ["process", "time"] }  # Process execution
 - [ ] Error handling for missing commands
 
 ### Hooks
+
 - [ ] Hook lifecycle events (all types)
 - [ ] Subprocess execution with JSON I/O
 - [ ] Timeout handling
@@ -337,6 +360,7 @@ tokio = { version = "1", features = ["process", "time"] }  # Process execution
 - [ ] Error handling and fallback
 
 ### Configuration
+
 - [ ] Settings.json parsing
 - [ ] Hook configuration schema
 - [ ] Status line configuration
@@ -345,30 +369,35 @@ tokio = { version = "1", features = ["process", "time"] }  # Process execution
 ## Test Coverage Requirements
 
 ### Unit Tests
+
 - Slash command parser
 - Hook executor
 - Settings parser
 - Subprocess runner with timeout
 
 ### Integration Tests
+
 - End-to-end slash command execution
 - Hook lifecycle execution
 - Configuration loading
 - Error handling scenarios
 
 ### Compatibility Tests
+
 - Existing OpenAI Codex tests must pass
 - No regressions in core functionality
 
 ## Security Considerations
 
 ### From codex_plus
+
 1. **Path Traversal Prevention**: Validate command/hook file paths
 2. **Command Injection**: Sanitize arguments passed to subprocess
 3. **Timeout Enforcement**: Prevent infinite subprocess execution
 4. **Resource Limits**: Limit subprocess memory/CPU usage
 
 ### Additional for Rust Implementation
+
 1. **Memory Safety**: Rust's ownership prevents many issues
 2. **Type Safety**: Use strong typing for all data structures
 3. **Error Handling**: Use Result types, no panics in production paths
@@ -376,6 +405,7 @@ tokio = { version = "1", features = ["process", "time"] }  # Process execution
 ## Migration Path
 
 ### For codex_plus Users
+
 1. Stop Python proxy (`./proxy.sh disable`)
 2. Install updated codex_fork binary
 3. Move `.codexplus/commands/` → `.claude/commands/`
@@ -385,6 +415,7 @@ tokio = { version = "1", features = ["process", "time"] }  # Process execution
 7. Unset `OPENAI_BASE_URL` environment variable
 
 ### For OpenAI Codex Users
+
 1. Update to codex_fork binary
 2. Optionally add `.claude/commands/` for slash commands
 3. Optionally add `.claude/hooks/` for hooks
@@ -393,12 +424,14 @@ tokio = { version = "1", features = ["process", "time"] }  # Process execution
 ## Implementation Phases
 
 ### Phase 1: Infrastructure (Week 1)
+
 - Add extension module to Rust workspace
 - Add configuration parsing (settings.json)
 - Add basic file discovery (.claude/ directories)
 - Write unit tests for infrastructure
 
 ### Phase 2: Slash Commands (Week 2)
+
 - Implement markdown + YAML parser
 - Add command detection in user input
 - Add instruction injection to prompts
@@ -406,6 +439,7 @@ tokio = { version = "1", features = ["process", "time"] }  # Process execution
 - Write integration tests
 
 ### Phase 3: Hook System (Week 3)
+
 - Implement hook lifecycle points
 - Add subprocess executor with JSON I/O
 - Add timeout and error handling
@@ -413,6 +447,7 @@ tokio = { version = "1", features = ["process", "time"] }  # Process execution
 - Write integration tests
 
 ### Phase 4: Polish and Documentation (Week 4)
+
 - Update README and documentation
 - Add migration guides
 - Performance optimization
@@ -429,13 +464,13 @@ tokio = { version = "1", features = ["process", "time"] }  # Process execution
 
 ## Risks and Mitigations
 
-| Risk | Impact | Probability | Mitigation |
-|------|--------|-------------|------------|
-| Breaking OpenAI Codex | High | Medium | Comprehensive testing, TDD approach |
-| Performance degradation | Medium | Low | Lazy loading, async execution |
-| Security vulnerabilities | High | Medium | Security audit, input validation |
-| Subprocess timeout issues | Low | Medium | Robust error handling, fallback |
-| Configuration complexity | Medium | Medium | Clear documentation, examples |
+| Risk                      | Impact | Probability | Mitigation                          |
+| ------------------------- | ------ | ----------- | ----------------------------------- |
+| Breaking OpenAI Codex     | High   | Medium      | Comprehensive testing, TDD approach |
+| Performance degradation   | Medium | Low         | Lazy loading, async execution       |
+| Security vulnerabilities  | High   | Medium      | Security audit, input validation    |
+| Subprocess timeout issues | Low    | Medium      | Robust error handling, fallback     |
+| Configuration complexity  | Medium | Medium      | Clear documentation, examples       |
 
 ## Conclusion
 
