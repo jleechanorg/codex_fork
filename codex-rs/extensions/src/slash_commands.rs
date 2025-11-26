@@ -78,8 +78,29 @@ impl SlashCommand {
     }
 
     /// Substitute arguments into the command content
+    ///
+    /// Supports the following placeholders:
+    /// - `$ARGUMENTS`: All arguments joined by space
+    /// - `$_raw_args`: Same as `$ARGUMENTS`
+    /// - `$1`, `$2`, etc.: Positional arguments (1-indexed)
     pub fn substitute_arguments(&self, args: &str) -> String {
-        self.content.replace("$ARGUMENTS", args)
+        let mut result = self.content.clone();
+
+        // Split args into positional arguments
+        let positional_args: Vec<&str> = args.split_whitespace().collect();
+
+        // $ARGUMENTS and $_raw_args: all args joined by space
+        result = result.replace("$ARGUMENTS", args);
+        result = result.replace("$_raw_args", args);
+
+        // $1, $2, ...: positional arguments
+        // Replace in reverse order to handle $10+ correctly (avoid $1 replacing part of $10)
+        for (i, arg) in positional_args.iter().enumerate().rev() {
+            let placeholder = format!("${}", i + 1);
+            result = result.replace(&placeholder, arg);
+        }
+
+        result
     }
 }
 
@@ -236,6 +257,68 @@ Hello $ARGUMENTS!
         let cmd = SlashCommand::from_string(content, Path::new("test.md")).unwrap();
         let substituted = cmd.substitute_arguments("World");
         assert_eq!(substituted.trim(), "Hello World!");
+    }
+
+    #[test]
+    fn test_substitute_positional_arguments() {
+        let content = r#"---
+name: test-args
+description: Test argument handling
+---
+
+You received the following arguments: $ARGUMENTS
+
+Arg 1: $1
+Arg 2: $2
+All args: $_raw_args
+"#;
+
+        let cmd = SlashCommand::from_string(content, Path::new("test.md")).unwrap();
+        let substituted = cmd.substitute_arguments("hello world");
+        assert!(substituted.contains("You received the following arguments: hello world"));
+        assert!(substituted.contains("Arg 1: hello"));
+        assert!(substituted.contains("Arg 2: world"));
+        assert!(substituted.contains("All args: hello world"));
+    }
+
+    #[test]
+    fn test_substitute_arguments_empty() {
+        let content = r#"---
+name: test
+description: Test empty args
+---
+
+Args: $ARGUMENTS
+First: $1
+"#;
+
+        let cmd = SlashCommand::from_string(content, Path::new("test.md")).unwrap();
+        let substituted = cmd.substitute_arguments("");
+        assert!(substituted.contains("Args:"));
+        // $1 placeholder remains if no args provided
+        assert!(substituted.contains("First: $1"));
+    }
+
+    #[test]
+    fn test_substitute_many_positional_arguments() {
+        // Test that $10 is not partially replaced by $1
+        let content = r#"---
+name: test-many
+description: Test many args
+---
+
+First: $1
+Tenth: $10
+Second: $2
+"#;
+
+        let cmd = SlashCommand::from_string(content, Path::new("test.md")).unwrap();
+        let substituted = cmd.substitute_arguments("a b c d e f g h i j");
+        assert!(substituted.contains("First: a"));
+        assert!(substituted.contains("Tenth: j"));
+        assert!(substituted.contains("Second: b"));
+        // Ensure $10 was NOT replaced as $1 + "0"
+        assert!(!substituted.contains("a0"));
     }
 
     #[test]

@@ -8,9 +8,12 @@ argument-hint: "[PR number (optional, defaults to current)]"
 
 Execute the full /copilot workflow adapted for Codex CLI. This command processes PR comments, implements fixes, and ensures 100% comment coverage with timing tracking.
 
-Optional behaviors inspired by /copilot:
-- Set `COPILOT_RECENT_LIMIT` (e.g. 30) to only process the most recent N original comments
-- Set `COPILOT_ALLOW_AUTOMERGE=1` to auto-merge when coverage is 100% and PR is mergeable
+## Configuration
+
+Optional environment variables:
+- `COPILOT_RECENT_LIMIT` (e.g. 30) - Only process the most recent N original comments
+- `COPILOT_ALLOW_AUTOMERGE=1` - Auto-merge when coverage is 100% and PR is mergeable
+- `COPILOT_AI_TAG` - Custom tag for AI responses (default: "[AI Responder codex]")
 
 ## 🚀 Phase 1: Initial Setup
 
@@ -152,12 +155,15 @@ echo "Show git diff after changes to verify implementation."
 
 ## 💬 Phase 5: Generate and Post Responses
 
-All posted replies are prefixed with the required "[AI Responder codex]" tag for easy identification and auditing.
+All posted replies are prefixed with the AI tag (configurable via `COPILOT_AI_TAG`, default: "[AI Responder codex]") for easy identification and auditing.
 
 Post responses to all comments:
 ```bash
 echo -e "\n💬 Posting responses to comments..."
 echo "⚙️ Orchestration: coordinating fixpr and analysis phases (stubs)"
+
+# Use configurable AI tag (defaults to "[AI Responder codex]")
+tag="${COPILOT_AI_TAG:-[AI Responder codex]}"
 
 # Post responses to each original comment
 for i in $(seq 0 $((original_count - 1))); do
@@ -165,8 +171,6 @@ for i in $(seq 0 $((original_count - 1))); do
   comment_id=$(echo "$comment" | jq -r '.id')
   body=$(echo "$comment" | jq -r '.body')
   path=$(echo "$comment" | jq -r '.path // "general"')
-  
-  tag="[AI Responder codex]"
   
   # Generate contextual response
   if echo "$body" | grep -iE "security|vulnerability" > /dev/null; then
