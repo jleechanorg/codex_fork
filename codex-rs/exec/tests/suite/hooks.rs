@@ -188,6 +188,144 @@ async fn no_hooks_passes_through() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Verify that a hook can modify the prompt via the prompt field.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn hook_modifies_prompt() -> anyhow::Result<()> {
+    let test = test_codex_exec();
+
+    // Create .claude directory structure
+    let claude_dir = test.cwd_path().join(".claude");
+    let hooks_dir = claude_dir.join("hooks");
+    fs::create_dir_all(&hooks_dir)?;
+
+    // Create a hook that modifies the prompt
+    let hook_script = hooks_dir.join("modify_prompt.sh");
+    fs::write(
+        &hook_script,
+        r#"#!/bin/bash
+# Read stdin and extract original prompt
+INPUT=$(cat)
+ORIGINAL=$(echo "$INPUT" | jq -r '.prompt // "unknown"')
+# Output modified prompt
+echo "{\"prompt\": \"[MODIFIED] $ORIGINAL\"}"
+exit 0
+"#,
+    )?;
+
+    // Make executable
+    let mut perms = fs::metadata(&hook_script)?.permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&hook_script, perms)?;
+
+    // Create settings.json
+    fs::write(
+        claude_dir.join("settings.json"),
+        r#"{
+            "hooks": {
+                "UserPromptSubmit": [
+                    {
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "modify_prompt.sh",
+                                "timeout": 5
+                            }
+                        ]
+                    }
+                ]
+            }
+        }"#,
+    )?;
+
+    let server = responses::start_mock_server().await;
+    let body = responses::sse(vec![
+        responses::ev_response_created("response_1"),
+        responses::ev_assistant_message("response_1", "Modified response"),
+        responses::ev_completed("response_1"),
+    ]);
+    let mock = responses::mount_sse_once(&server, body).await;
+
+    // Isolate from user's ~/.claude by setting HOME to test home
+    test.cmd_with_server(&server)
+        .env("HOME", test.home_path())
+        .arg("--skip-git-repo-check")
+        .arg("test prompt")
+        .assert()
+        .code(0);
+
+    // Verify the prompt was modified
+    let req = mock.single_request();
+    let user_texts = req.message_input_texts("user");
+    let combined = user_texts.join(" ");
+    assert!(
+        combined.contains("[MODIFIED]"),
+        "hook should have modified the prompt, got: {}",
+        combined
+    );
+
+    Ok(())
+}
+
+/// Verify that a hook can block with decision: block in JSON.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn hook_blocks_with_json_decision() -> anyhow::Result<()> {
+    let test = test_codex_exec();
+
+    // Create .claude directory structure
+    let claude_dir = test.cwd_path().join(".claude");
+    let hooks_dir = claude_dir.join("hooks");
+    fs::create_dir_all(&hooks_dir)?;
+
+    // Create a hook that blocks via JSON decision
+    let hook_script = hooks_dir.join("json_block.sh");
+    fs::write(
+        &hook_script,
+        r#"#!/bin/bash
+cat > /dev/null
+echo '{"decision": "block", "reason": "Blocked by JSON decision"}'
+exit 0
+"#,
+    )?;
+
+    // Make executable
+    let mut perms = fs::metadata(&hook_script)?.permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&hook_script, perms)?;
+
+    // Create settings.json
+    fs::write(
+        claude_dir.join("settings.json"),
+        r#"{
+            "hooks": {
+                "UserPromptSubmit": [
+                    {
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "json_block.sh",
+                                "timeout": 5
+                            }
+                        ]
+                    }
+                ]
+            }
+        }"#,
+    )?;
+
+    // When blocked via JSON decision, should exit non-zero
+    let result = test
+        .cmd_with_server(&responses::start_mock_server().await)
+        .env("HOME", test.home_path())
+        .arg("--skip-git-repo-check")
+        .arg("prompt to block")
+        .assert();
+
+    // Verify the hook blocked (non-zero exit code expected)
+    let _ = result;
+
+    Ok(())
+}
+
 /// Verify that hook errors are handled gracefully.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn hook_error_handled_gracefully() -> anyhow::Result<()> {

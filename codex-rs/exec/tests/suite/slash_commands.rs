@@ -184,6 +184,63 @@ Echo back: $ARGUMENTS
     Ok(())
 }
 
+/// Verify that positional arguments ($1, $2, etc.) are substituted.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn slash_command_positional_arguments() -> anyhow::Result<()> {
+    let test = test_codex_exec();
+
+    // Create .claude/commands directory with a test command
+    let claude_dir = test.cwd_path().join(".claude");
+    let commands_dir = claude_dir.join("commands");
+    fs::create_dir_all(&commands_dir)?;
+
+    // Create a command that uses positional arguments
+    fs::write(
+        commands_dir.join("greet.md"),
+        r#"---
+name: greet
+description: Greeting with positional args
+---
+
+Hello $1! Your favorite color is $2.
+All args: $ARGUMENTS
+"#,
+    )?;
+
+    let server = responses::start_mock_server().await;
+    let body = responses::sse(vec![
+        responses::ev_response_created("response_1"),
+        responses::ev_assistant_message("response_1", "Greeted"),
+        responses::ev_completed("response_1"),
+    ]);
+    let mock = responses::mount_sse_once(&server, body).await;
+
+    // Isolate from user's ~/.claude by setting HOME to test home
+    test.cmd_with_server(&server)
+        .env("HOME", test.home_path())
+        .arg("--skip-git-repo-check")
+        .arg("/greet Alice blue")
+        .assert()
+        .code(0);
+
+    // Verify positional arguments were substituted
+    let req = mock.single_request();
+    let user_texts = req.message_input_texts("user");
+    let combined = user_texts.join(" ");
+    assert!(
+        combined.contains("Hello Alice"),
+        "$1 should be substituted with 'Alice', got: {}",
+        combined
+    );
+    assert!(
+        combined.contains("blue"),
+        "$2 should be substituted with 'blue', got: {}",
+        combined
+    );
+
+    Ok(())
+}
+
 /// Verify that .codexplus commands take precedence over .claude commands.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn codexplus_takes_precedence() -> anyhow::Result<()> {
