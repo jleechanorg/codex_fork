@@ -32,6 +32,8 @@ jobs:
 
       - name: Stage npm package
         id: stage_npm_package
+        # Skip npm staging for dependabot PRs since they don't create release workflows
+        if: ${{ !startsWith(github.head_ref, 'dependabot/') }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -46,6 +48,8 @@ jobs:
           echo "pack_output=$PACK_OUTPUT" >> "$GITHUB_OUTPUT"
 
       - name: Upload staged npm package artifact
+        # Skip npm staging for dependabot PRs since they don't create release workflows
+        if: ${{ !startsWith(github.head_ref, 'dependabot/') }}
         uses: actions/upload-artifact@v5
         with:
           name: codex-npm-staging
