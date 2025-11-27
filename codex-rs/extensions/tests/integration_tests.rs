@@ -306,15 +306,14 @@ fn test_multiple_commands_loading() {
 
     for (name, desc) in commands {
         std::fs::write(
-            commands_dir.join(format!("{}.md", name)),
+            commands_dir.join(format!("{name}.md")),
             format!(
                 r#"---
-name: {}
-description: {}
+name: {name}
+description: {desc}
 ---
-Command content for {}
+Command content for {name}
 "#,
-                name, desc, name
             ),
         )
         .unwrap();

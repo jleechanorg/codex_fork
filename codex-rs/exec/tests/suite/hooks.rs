@@ -259,8 +259,7 @@ exit 0
     let combined = user_texts.join(" ");
     assert!(
         combined.contains("[MODIFIED]"),
-        "hook should have modified the prompt, got: {}",
-        combined
+        "hook should have modified the prompt, got: {combined}",
     );
 
     Ok(())

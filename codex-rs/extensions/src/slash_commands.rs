@@ -48,7 +48,7 @@ impl SlashCommand {
         let metadata: CommandMetadata = serde_yaml::from_str(&frontmatter).map_err(|e| {
             ExtensionError::InvalidCommandFormat {
                 path: path.to_path_buf(),
-                reason: format!("Invalid YAML frontmatter: {}", e),
+                reason: format!("Invalid YAML frontmatter: {e}"),
             }
         })?;
 
@@ -115,7 +115,7 @@ impl SlashCommand {
         }
 
         for (key, value) in named_args {
-            let placeholder = format!("${}", key);
+            let placeholder = format!("${key}");
             out = out.replace(&placeholder, &value);
         }
 

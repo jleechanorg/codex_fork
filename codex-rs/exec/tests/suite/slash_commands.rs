@@ -229,13 +229,11 @@ All args: $ARGUMENTS
     let combined = user_texts.join(" ");
     assert!(
         combined.contains("Hello Alice"),
-        "$1 should be substituted with 'Alice', got: {}",
-        combined
+        "$1 should be substituted with 'Alice', got: {combined}",
     );
     assert!(
         combined.contains("blue"),
-        "$2 should be substituted with 'blue', got: {}",
-        combined
+        "$2 should be substituted with 'blue', got: {combined}",
     );
 
     Ok(())

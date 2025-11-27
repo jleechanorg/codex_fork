@@ -225,7 +225,7 @@ impl HookSystem {
             .current_dir(&self.project_dir)
             .env("CLAUDE_PROJECT_DIR", &self.project_dir)
             .spawn()
-            .map_err(|e| ExtensionError::HookExecutionFailed(format!("Failed to spawn: {}", e)))?;
+            .map_err(|e| ExtensionError::HookExecutionFailed(format!("Failed to spawn: {e}")))?;
 
         // Write input to stdin
         // Note: Some hooks may exit immediately without reading stdin, causing a broken pipe.
@@ -263,7 +263,7 @@ impl HookSystem {
         let wait_fut = child.wait();
         let status = match tokio::time::timeout(timeout, wait_fut).await {
             Ok(res) => res.map_err(|e| {
-                ExtensionError::HookExecutionFailed(format!("Failed to wait for process: {}", e))
+                ExtensionError::HookExecutionFailed(format!("Failed to wait for process: {e}"))
             })?,
             Err(_) => {
                 let _ = child.kill().await;
