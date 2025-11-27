@@ -233,7 +233,7 @@ impl HookSystem {
         if let Some(mut stdin) = child.stdin.take() {
             if let Err(e) = stdin.write_all(input_json.as_bytes()).await {
                 // Log the error but continue - hook may have exited early
-                eprintln!("Warning: Failed to write to hook stdin: {}", e);
+                eprintln!("Warning: Failed to write to hook stdin: {e}");
             }
             stdin.flush().await.ok();
             drop(stdin);
