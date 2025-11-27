@@ -12,7 +12,7 @@ name: scaffold-ci
 #   workflow_dispatch:
 
 on:
-  workflow_dispatch: # Manual trigger only for now
+  workflow_dispatch:  # Manual trigger only for now
 
 jobs:
   scaffolded-lint:
