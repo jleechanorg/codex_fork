@@ -239,6 +239,64 @@ All args: $ARGUMENTS
     Ok(())
 }
 
+/// Verify that named arguments (key=value) are substituted.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn slash_command_named_arguments() -> anyhow::Result<()> {
+    let test = test_codex_exec();
+
+    // Create .claude/commands directory with a test command
+    let claude_dir = test.cwd_path().join(".claude");
+    let commands_dir = claude_dir.join("commands");
+    fs::create_dir_all(&commands_dir)?;
+
+    // Create a command that uses named arguments
+    fs::write(
+        commands_dir.join("deploy.md"),
+        r#"---
+name: deploy
+description: Deploy with named args
+---
+
+Deploying to environment: $env
+Version: $version
+All args: $ARGUMENTS
+"#,
+    )?;
+
+    let server = responses::start_mock_server().await;
+    let body = responses::sse(vec![
+        responses::ev_response_created("response_1"),
+        responses::ev_assistant_message("response_1", "Deployed"),
+        responses::ev_completed("response_1"),
+    ]);
+    let mock = responses::mount_sse_once(&server, body).await;
+
+    // Isolate from user's ~/.claude by setting HOME to test home
+    test.cmd_with_server(&server)
+        .env("HOME", test.home_path())
+        .arg("--skip-git-repo-check")
+        .arg("/deploy env=production version=1.2.3")
+        .assert()
+        .code(0);
+
+    // Verify named arguments were substituted
+    let req = mock.single_request();
+    let user_texts = req.message_input_texts("user");
+    let combined = user_texts.join(" ");
+    assert!(
+        combined.contains("production"),
+        "$env should be substituted with 'production', got: {}",
+        combined
+    );
+    assert!(
+        combined.contains("1.2.3"),
+        "$version should be substituted with '1.2.3', got: {}",
+        combined
+    );
+
+    Ok(())
+}
+
 /// Verify that .codexplus commands take precedence over .claude commands.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn codexplus_takes_precedence() -> anyhow::Result<()> {

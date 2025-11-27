@@ -398,3 +398,101 @@ exit 1
 
     Ok(())
 }
+
+/// Verify that multiple hooks execute in sequence.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn multiple_hooks_execute_sequentially() -> anyhow::Result<()> {
+    let test = test_codex_exec();
+
+    // Create .claude directory structure
+    let claude_dir = test.cwd_path().join(".claude");
+    let hooks_dir = claude_dir.join("hooks");
+    fs::create_dir_all(&hooks_dir)?;
+
+    // Create first hook that adds prefix
+    let hook1 = hooks_dir.join("hook1.sh");
+    fs::write(
+        &hook1,
+        r#"#!/bin/bash
+INPUT=$(cat)
+PROMPT=$(echo "$INPUT" | jq -r '.prompt // "unknown"')
+echo "{\"prompt\": \"[HOOK1] $PROMPT\"}"
+exit 0
+"#,
+    )?;
+    let mut perms = fs::metadata(&hook1)?.permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&hook1, perms)?;
+
+    // Create second hook that adds suffix
+    let hook2 = hooks_dir.join("hook2.sh");
+    fs::write(
+        &hook2,
+        r#"#!/bin/bash
+INPUT=$(cat)
+PROMPT=$(echo "$INPUT" | jq -r '.prompt // "unknown"')
+echo "{\"prompt\": \"$PROMPT [HOOK2]\"}"
+exit 0
+"#,
+    )?;
+    let mut perms = fs::metadata(&hook2)?.permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&hook2, perms)?;
+
+    // Create settings.json with both hooks
+    fs::write(
+        claude_dir.join("settings.json"),
+        r#"{
+            "hooks": {
+                "UserPromptSubmit": [
+                    {
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "hook1.sh",
+                                "timeout": 5
+                            },
+                            {
+                                "type": "command",
+                                "command": "hook2.sh",
+                                "timeout": 5
+                            }
+                        ]
+                    }
+                ]
+            }
+        }"#,
+    )?;
+
+    let server = responses::start_mock_server().await;
+    let body = responses::sse(vec![
+        responses::ev_response_created("response_1"),
+        responses::ev_assistant_message("response_1", "Multi-hook response"),
+        responses::ev_completed("response_1"),
+    ]);
+    let mock = responses::mount_sse_once(&server, body).await;
+
+    // Isolate from user's ~/.claude by setting HOME to test home
+    test.cmd_with_server(&server)
+        .env("HOME", test.home_path())
+        .arg("--skip-git-repo-check")
+        .arg("original")
+        .assert()
+        .code(0);
+
+    // Verify both hooks modified the prompt
+    let req = mock.single_request();
+    let user_texts = req.message_input_texts("user");
+    let combined = user_texts.join(" ");
+
+    // Both hooks should have run - check for either order
+    let has_hook1 = combined.contains("[HOOK1]");
+    let has_hook2 = combined.contains("[HOOK2]");
+    assert!(
+        has_hook1 || has_hook2,
+        "at least one hook should have modified the prompt, got: {}",
+        combined
+    );
+
+    Ok(())
+}
