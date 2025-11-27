@@ -45,7 +45,7 @@ async fn main() {
             }
         }
         Err(e) => {
-            eprintln!("   ✗ Failed to load settings: {}", e);
+            eprintln!("   ✗ Failed to load settings: {e}");
         }
     }
 
@@ -76,7 +76,7 @@ async fn main() {
 
             for input in test_inputs {
                 if let Some((cmd_name, args)) = SlashCommandRegistry::detect_command(input) {
-                    println!("   ✓ Detected: /{} with args: '{}'", cmd_name, args);
+                    println!("   ✓ Detected: /{cmd_name} with args: '{args}'");
                     if let Some(cmd) = registry.get(&cmd_name) {
                         let substituted = cmd.substitute_arguments(&args);
                         println!(
@@ -85,12 +85,12 @@ async fn main() {
                         );
                     }
                 } else {
-                    println!("   - No command in: {}", input);
+                    println!("   - No command in: {input}");
                 }
             }
         }
         Err(e) => {
-            eprintln!("   ✗ Failed to load commands: {}", e);
+            eprintln!("   ✗ Failed to load commands: {e}");
         }
     }
 
@@ -131,19 +131,19 @@ async fn main() {
                         for (i, result) in results.iter().enumerate() {
                             println!("     Hook {}: exit code {}", i + 1, result.exit_code);
                             if let Some(output) = &result.parsed_output {
-                                println!("       Output: {:?}", output);
+                                println!("       Output: {output:?}");
                             }
                             if result.is_blocking() {
                                 println!("       ⚠ This hook would block the action!");
                                 if let Some(reason) = result.block_reason() {
-                                    println!("       Reason: {}", reason);
+                                    println!("       Reason: {reason}");
                                 }
                             }
                         }
                     }
                 }
                 Err(e) => {
-                    eprintln!("   ✗ Hook execution failed: {}", e);
+                    eprintln!("   ✗ Hook execution failed: {e}");
                 }
             }
 
@@ -177,12 +177,12 @@ async fn main() {
                     }
                 }
                 Err(e) => {
-                    eprintln!("   ✗ Hook execution failed: {}", e);
+                    eprintln!("   ✗ Hook execution failed: {e}");
                 }
             }
         }
         Err(e) => {
-            eprintln!("   ✗ Failed to initialize hook system: {}", e);
+            eprintln!("   ✗ Failed to initialize hook system: {e}");
         }
     }
 

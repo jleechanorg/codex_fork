@@ -490,8 +490,7 @@ exit 0
     let has_hook2 = combined.contains("[HOOK2]");
     assert!(
         has_hook1 || has_hook2,
-        "at least one hook should have modified the prompt, got: {}",
-        combined
+        "at least one hook should have modified the prompt, got: {combined}"
     );
 
     Ok(())

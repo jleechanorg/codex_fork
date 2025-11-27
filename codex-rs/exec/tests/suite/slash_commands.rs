@@ -285,13 +285,11 @@ All args: $ARGUMENTS
     let combined = user_texts.join(" ");
     assert!(
         combined.contains("production"),
-        "$env should be substituted with 'production', got: {}",
-        combined
+        "$env should be substituted with 'production', got: {combined}"
     );
     assert!(
         combined.contains("1.2.3"),
-        "$version should be substituted with '1.2.3', got: {}",
-        combined
+        "$version should be substituted with '1.2.3', got: {combined}"
     );
 
     Ok(())
