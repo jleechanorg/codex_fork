@@ -29,6 +29,7 @@ use std::collections::HashMap;
 #### New Functions
 
 **`execute_pre_tool_use_hooks()`** (lines 218-279)
+
 - Executes PreToolUse hooks before tool execution
 - Loads settings and checks if PreToolUse hooks are configured
 - Builds hook input with tool metadata (tool_name, tool_use_id, tool_input)
@@ -36,6 +37,7 @@ use std::collections::HashMap;
 - Returns `ToolError::Rejected` if any hook blocks execution
 
 **`execute_post_tool_use_hooks()`** (lines 281-338)
+
 - Executes PostToolUse hooks after tool execution
 - Similar structure to PreToolUse but includes tool_response in context
 - Logs warnings if PostToolUse hooks attempt to block (informational only)
@@ -44,11 +46,13 @@ use std::collections::HashMap;
 #### Integration Points
 
 **Initial tool execution** (lines 110-127):
+
 - PreToolUse hooks execute before `tool.run()` (line 112)
 - PostToolUse hooks execute after successful execution (lines 118-124)
 - PostToolUse errors are logged but don't fail the tool
 
 **Sandbox retry execution** (lines 193-211):
+
 - PreToolUse hooks execute before retry (line 194)
 - PostToolUse hooks execute after successful retry (lines 200-208)
 
@@ -76,6 +80,7 @@ use std::collections::HashMap;
 ### Existing Tests
 
 The existing integration tests in `codex-rs/extensions/tests/integration_tests.rs` verify:
+
 - Hook execution with PreToolUse events (line 189-253)
 - Hook blocking behavior (exit code 2)
 - Multiple hook execution
@@ -85,6 +90,7 @@ The existing integration tests in `codex-rs/extensions/tests/integration_tests.r
 Test configuration files have been created in `.claude/`:
 
 **`.claude/settings.json`**:
+
 ```json
 {
   "hooks": {
@@ -122,16 +128,19 @@ Logs hook executions to `/tmp/codex_hook_test.log`
 ### Running Manual Tests
 
 1. Build codex:
+
    ```bash
    cd codex-rs && cargo build --bin codex
    ```
 
 2. Clear log file:
+
    ```bash
    rm -f /tmp/codex_hook_test.log
    ```
 
 3. Run codex exec with tool usage:
+
    ```bash
    cargo run --bin codex -- exec --yolo "run echo 'test'"
    ```
@@ -142,6 +151,7 @@ Logs hook executions to `/tmp/codex_hook_test.log`
    ```
 
 Expected output:
+
 ```
 [timestamp] Hook executed: PreToolUse for tool: Bash
 [timestamp] Hook executed: PostToolUse for tool: Bash
