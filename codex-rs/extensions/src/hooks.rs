@@ -228,10 +228,13 @@ impl HookSystem {
             .map_err(|e| ExtensionError::HookExecutionFailed(format!("Failed to spawn: {}", e)))?;
 
         // Write input to stdin
+        // Note: Some hooks may exit immediately without reading stdin, causing a broken pipe.
+        // This is normal behavior for hooks that don't need input, so we log but don't fail.
         if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(input_json.as_bytes()).await.map_err(|e| {
-                ExtensionError::HookExecutionFailed(format!("Failed to write stdin: {}", e))
-            })?;
+            if let Err(e) = stdin.write_all(input_json.as_bytes()).await {
+                // Log the error but continue - hook may have exited early
+                eprintln!("Warning: Failed to write to hook stdin: {}", e);
+            }
             stdin.flush().await.ok();
             drop(stdin);
         }
