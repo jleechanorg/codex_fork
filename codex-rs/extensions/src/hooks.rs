@@ -427,7 +427,16 @@ mod tests {
     #[tokio::test]
     #[cfg(unix)]
     async fn test_execute_simple_hook() {
+        use std::env;
+
         let temp_dir = TempDir::new().unwrap();
+
+        // Make test hermetic to user HOME
+        let temp_home = temp_dir.path().join("fake_home");
+        std::fs::create_dir_all(&temp_home).unwrap();
+        unsafe {
+            env::set_var("HOME", &temp_home);
+        }
 
         // Create a simple echo hook script
         let hooks_dir = temp_dir.path().join(".claude/hooks");
@@ -480,6 +489,10 @@ cat  # Echo stdin to stdout
             .execute(HookEvent::SessionStart, input)
             .await
             .unwrap();
+
+        unsafe {
+            env::remove_var("HOME");
+        }
 
         assert_eq!(results.len(), 1);
         assert!(results[0].stdout.contains("test-session"));

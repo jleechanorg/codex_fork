@@ -16,8 +16,13 @@ use crate::tools::sandboxing::SandboxAttempt;
 use crate::tools::sandboxing::ToolCtx;
 use crate::tools::sandboxing::ToolError;
 use crate::tools::sandboxing::ToolRuntime;
+use codex_extensions::HookEvent;
+use codex_extensions::HookInput;
+use codex_extensions::HookSystem;
+use codex_extensions::Settings;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::ReviewDecision;
+use std::collections::HashMap;
 
 pub(crate) struct ToolOrchestrator {
     sandbox: SandboxManager,
@@ -102,8 +107,22 @@ impl ToolOrchestrator {
             codex_linux_sandbox_exe: turn_ctx.codex_linux_sandbox_exe.as_ref(),
         };
 
+        // Execute PreToolUse hooks (pass empty JSON since req isn't serializable)
+        let tool_input_json = serde_json::Value::Object(serde_json::Map::new());
+        execute_pre_tool_use_hooks(tool_ctx, turn_ctx, &tool_input_json).await?;
+
         match tool.run(req, &initial_attempt, tool_ctx).await {
             Ok(out) => {
+                // Execute PostToolUse hooks
+                let tool_response_json = serde_json::Value::Object(serde_json::Map::new());
+                let _ = execute_post_tool_use_hooks(
+                    tool_ctx,
+                    turn_ctx,
+                    &tool_input_json,
+                    &tool_response_json,
+                )
+                .await; // Don't fail if post hooks error
+
                 // We have a successful initial result
                 Ok(out)
             }
@@ -171,12 +190,164 @@ impl ToolOrchestrator {
                     codex_linux_sandbox_exe: None,
                 };
 
+                // Execute PreToolUse hooks for retry
+                execute_pre_tool_use_hooks(tool_ctx, turn_ctx, &tool_input_json).await?;
+
                 // Second attempt.
-                (*tool).run(req, &escalated_attempt, tool_ctx).await
+                let result = (*tool).run(req, &escalated_attempt, tool_ctx).await;
+
+                // Execute PostToolUse hooks if successful
+                if result.is_ok() {
+                    let tool_response_json = serde_json::Value::Object(serde_json::Map::new());
+                    let _ = execute_post_tool_use_hooks(
+                        tool_ctx,
+                        turn_ctx,
+                        &tool_input_json,
+                        &tool_response_json,
+                    )
+                    .await;
+                }
+
+                result
             }
             other => other,
         }
     }
+}
+
+/// Execute PreToolUse hooks before tool execution
+async fn execute_pre_tool_use_hooks(
+    tool_ctx: &ToolCtx<'_>,
+    turn_ctx: &crate::codex::TurnContext,
+    tool_input: &serde_json::Value,
+) -> Result<(), ToolError> {
+    // Load settings
+    let project_dir = Some(turn_ctx.cwd.as_path());
+    let settings = match Settings::load(project_dir) {
+        Ok(s) => s,
+        Err(_) => return Ok(()), // No hooks configured
+    };
+
+    // Check if PreToolUse hooks are configured
+    if !settings.hooks.contains_key("PreToolUse") {
+        return Ok(());
+    }
+
+    // Create hook system
+    let hook_system = match HookSystem::new(project_dir) {
+        Ok(h) => h,
+        Err(_) => return Ok(()),
+    };
+
+    // Build hook input
+    let mut extra = HashMap::new();
+    extra.insert(
+        "tool_name".to_string(),
+        serde_json::Value::String(tool_ctx.tool_name.clone()),
+    );
+    extra.insert(
+        "tool_use_id".to_string(),
+        serde_json::Value::String(tool_ctx.call_id.clone()),
+    );
+    extra.insert("tool_input".to_string(), tool_input.clone());
+
+    let input = HookInput {
+        session_id: turn_ctx.sub_id.clone(),
+        transcript_path: String::new(),
+        cwd: turn_ctx.cwd.display().to_string(),
+        hook_event_name: "PreToolUse".to_string(),
+        extra,
+    };
+
+    // Execute hooks - if hooks fail to execute (e.g., missing scripts), log and continue
+    let results = match hook_system.execute(HookEvent::PreToolUse, input).await {
+        Ok(results) => results,
+        Err(e) => {
+            // Hook execution failed (missing script, spawn error, etc.)
+            // Log the error but don't fail tool execution
+            tracing::debug!("PreToolUse hook execution failed: {e}");
+            return Ok(());
+        }
+    };
+
+    // Check for blocking hooks
+    for result in &results {
+        if result.is_blocking() {
+            let reason = result
+                .block_reason()
+                .unwrap_or_else(|| "Hook blocked tool execution".to_string());
+            return Err(ToolError::Rejected(reason));
+        }
+    }
+
+    Ok(())
+}
+
+/// Execute PostToolUse hooks after tool execution
+async fn execute_post_tool_use_hooks(
+    tool_ctx: &ToolCtx<'_>,
+    turn_ctx: &crate::codex::TurnContext,
+    tool_input: &serde_json::Value,
+    tool_response: &serde_json::Value,
+) -> Result<(), ToolError> {
+    // Load settings
+    let project_dir = Some(turn_ctx.cwd.as_path());
+    let settings = match Settings::load(project_dir) {
+        Ok(s) => s,
+        Err(_) => return Ok(()), // No hooks configured
+    };
+
+    // Check if PostToolUse hooks are configured
+    if !settings.hooks.contains_key("PostToolUse") {
+        return Ok(());
+    }
+
+    // Create hook system
+    let hook_system = match HookSystem::new(project_dir) {
+        Ok(h) => h,
+        Err(_) => return Ok(()),
+    };
+
+    // Build hook input
+    let mut extra = HashMap::new();
+    extra.insert(
+        "tool_name".to_string(),
+        serde_json::Value::String(tool_ctx.tool_name.clone()),
+    );
+    extra.insert(
+        "tool_use_id".to_string(),
+        serde_json::Value::String(tool_ctx.call_id.clone()),
+    );
+    extra.insert("tool_input".to_string(), tool_input.clone());
+    extra.insert("tool_response".to_string(), tool_response.clone());
+
+    let input = HookInput {
+        session_id: turn_ctx.sub_id.clone(),
+        transcript_path: String::new(),
+        cwd: turn_ctx.cwd.display().to_string(),
+        hook_event_name: "PostToolUse".to_string(),
+        extra,
+    };
+
+    // Execute hooks - if hooks fail to execute, log and continue
+    let results = match hook_system.execute(HookEvent::PostToolUse, input).await {
+        Ok(results) => results,
+        Err(e) => {
+            // Hook execution failed (missing script, spawn error, etc.)
+            // Log the error but don't fail since tool already executed
+            tracing::debug!("PostToolUse hook execution failed: {e}");
+            return Ok(());
+        }
+    };
+
+    // Check for blocking hooks (informational for PostToolUse since tool already ran)
+    for result in &results {
+        if result.is_blocking() {
+            tracing::warn!("PostToolUse hook blocked, but tool already executed");
+        }
+    }
+
+    Ok(())
 }
 
 fn build_denial_reason_from_output(_output: &ExecToolCallOutput) -> String {
