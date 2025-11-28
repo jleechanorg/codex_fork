@@ -265,7 +265,7 @@ async fn execute_pre_tool_use_hooks(
         Err(e) => {
             // Hook execution failed (missing script, spawn error, etc.)
             // Log the error but don't fail tool execution
-            tracing::debug!("PreToolUse hook execution failed: {e}");
+            tracing::warn!("PreToolUse hook execution failed: {e}");
             return Ok(());
         }
     };
@@ -335,7 +335,7 @@ async fn execute_post_tool_use_hooks(
         Err(e) => {
             // Hook execution failed (missing script, spawn error, etc.)
             // Log the error but don't fail since tool already executed
-            tracing::debug!("PostToolUse hook execution failed: {e}");
+            tracing::warn!("PostToolUse hook execution failed: {e}");
             return Ok(());
         }
     };
