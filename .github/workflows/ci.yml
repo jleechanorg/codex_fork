@@ -32,6 +32,7 @@ jobs:
 
       - name: Stage npm package
         id: stage_npm_package
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
