@@ -97,7 +97,6 @@ jobs:
     env:
       # Speed up repeated builds across CI runs by caching compiled objects (non-Windows).
       USE_SCCACHE: ${{ startsWith(matrix.runner, 'windows') && 'false' || 'true' }}
-      RUSTC_WRAPPER: ${{ startsWith(matrix.runner, 'windows') && '' || 'sccache' }}
       CARGO_INCREMENTAL: "0"
       SCCACHE_CACHE_SIZE: 10G
 
@@ -182,6 +181,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Set RUSTC_WRAPPER for non-Windows platforms only
+          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
           if [[ -n "${ACTIONS_CACHE_URL:-}" && -n "${ACTIONS_RUNTIME_TOKEN:-}" ]]; then
             echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
             echo "Using sccache GitHub backend"
@@ -331,7 +332,6 @@ jobs:
     env:
       # Speed up repeated builds across CI runs by caching compiled objects (non-Windows).
       USE_SCCACHE: ${{ startsWith(matrix.runner, 'windows') && 'false' || 'true' }}
-      RUSTC_WRAPPER: ${{ startsWith(matrix.runner, 'windows') && '' || 'sccache' }}
       CARGO_INCREMENTAL: "0"
       SCCACHE_CACHE_SIZE: 10G
 
@@ -386,6 +386,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Set RUSTC_WRAPPER for non-Windows platforms only
+          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
           if [[ -n "${ACTIONS_CACHE_URL:-}" && -n "${ACTIONS_RUNTIME_TOKEN:-}" ]]; then
             echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
             echo "Using sccache GitHub backend"
