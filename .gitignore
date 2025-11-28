@@ -29,8 +29,6 @@ result
 
 # cli tools
 CLAUDE.md
-.claude/
-.codexplus/
 AGENTS.override.md
 
 # caches
