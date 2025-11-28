@@ -266,6 +266,7 @@ mod detect_shell_type_tests {
 #[cfg(unix)]
 mod tests {
     use super::*;
+    use std::path::Path;
     use std::path::PathBuf;
     use std::process::Command;
 
@@ -291,8 +292,7 @@ mod tests {
         };
 
         assert!(
-            shell_path == PathBuf::from("/bin/bash")
-                || shell_path == PathBuf::from("/usr/bin/bash"),
+            shell_path == Path::new("/bin/bash") || shell_path == Path::new("/usr/bin/bash"),
             "shell path: {shell_path:?}",
         );
     }
