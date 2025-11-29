@@ -4,9 +4,9 @@
 # Read JSON payload from stdin
 INPUT=$(cat)
 
-# Parse tool information from JSON
-TOOL_NAME=$(echo "$INPUT" | jq -r '.extra.tool_name // "unknown"')
-TOOL_USE_ID=$(echo "$INPUT" | jq -r '.extra.tool_use_id // "unknown"')
+# Parse tool information from JSON (flattened extra)
+TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // "unknown"')
+TOOL_USE_ID=$(echo "$INPUT" | jq -r '.tool_use_id // "unknown"')
 
 # Log to file
 LOG_FILE="/tmp/codex_plus_hooks.log"

@@ -29,16 +29,16 @@ class HookRunner:
         """Extract common fields used by all hooks"""
         return {
             "timestamp": datetime.now().isoformat(),
-            "session_id": payload.get("session_id", "unknown"),
+            "session_id": payload.get("sessionId", payload.get("session_id", "unknown")),
         }
 
     def log_message(self, message: str) -> None:
-        """Log a hook message to stdout"""
-        print(f"[{self.hook_type} Hook] {message}")
+        """Log a hook message to stderr to keep stdout JSON-only"""
+        print(f"[{self.hook_type} Hook] {message}", file=sys.stderr)
 
     def log_error(self, error: str) -> None:
-        """Log an error message"""
-        print(f"[{self.hook_type} Hook Error] {error}")
+        """Log an error message to stderr to keep stdout JSON-only"""
+        print(f"[{self.hook_type} Hook Error] {error}", file=sys.stderr)
 
     def output_feedback(self, feedback: Dict[str, Any]) -> None:
         """Output structured feedback as JSON"""

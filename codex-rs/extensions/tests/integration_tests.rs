@@ -49,7 +49,8 @@ Greet the user: $ARGUMENTS
     std::fs::write(
         &hook_script,
         r#"#!/bin/bash
-cat | jq -c '.session_id'
+cat >/dev/null
+echo '{"decision":"allow"}'
 "#,
     )
     .unwrap();
