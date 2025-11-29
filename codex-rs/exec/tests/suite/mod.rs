@@ -2,8 +2,10 @@
 mod add_dir;
 mod apply_patch;
 mod auth_env;
+mod hooks;
 mod originator;
 mod output_schema;
 mod resume;
 mod sandbox;
 mod server_error_exit;
+mod slash_commands;

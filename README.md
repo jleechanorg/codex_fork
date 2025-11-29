@@ -65,6 +65,53 @@ You can also use Codex with an API key, but this requires [additional setup](./d
 
 Codex can access MCP servers. To configure them, refer to the [config docs](./docs/config.md#mcp_servers).
 
+### Extensions (Slash Commands & Hooks)
+
+**New!** This fork includes an extension system that adds powerful customization capabilities through slash commands and lifecycle hooks.
+
+#### Slash Commands
+
+Create custom commands using markdown files:
+
+```bash
+# Try the example commands
+codex "/hello World"
+codex "/echo test message"
+```
+
+Get started:
+
+```bash
+# Copy examples to your home directory
+cp -r examples/claude ~/.claude
+chmod +x ~/.claude/hooks/*.py
+
+# Create your own commands
+echo '---
+name: mycommand
+description: My custom command
+---
+Do something amazing with: $ARGUMENTS' > ~/.claude/commands/mycommand.md
+```
+
+#### Hooks
+
+Run custom scripts at key points in the CLI lifecycle (UserPromptSubmit, PreToolUse, SessionStart, etc.):
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [{ "type": "command", "command": "validate.sh", "timeout": 5 }]
+      }
+    ]
+  }
+}
+```
+
+See [examples/claude/README.md](./examples/claude/README.md) for full documentation.
+
 ### Configuration
 
 Codex CLI supports a rich set of configuration options, with preferences stored in `~/.codex/config.toml`. For full configuration options, see [Configuration](./docs/config.md).
