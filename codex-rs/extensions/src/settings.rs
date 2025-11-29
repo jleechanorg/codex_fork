@@ -71,7 +71,6 @@ impl Settings {
 
         // Load in reverse precedence order (later overwrites earlier)
         let settings_paths = [
-            dirs::home_dir().map(|h| h.join(".claude/settings.json")),
             Some(base_dir.join(".claude/settings.json")),
             Some(base_dir.join(".codexplus/settings.json")),
         ];

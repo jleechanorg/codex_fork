@@ -9,6 +9,8 @@ use crate::error::CodexErr;
 use crate::error::SandboxErr;
 use crate::error::get_error_message_ui;
 use crate::exec::ExecToolCallOutput;
+use crate::protocol::BackgroundEventEvent;
+use crate::protocol::EventMsg;
 use crate::sandboxing::SandboxManager;
 use crate::tools::sandboxing::ApprovalCtx;
 use crate::tools::sandboxing::ProvidesSandboxRetryData;
@@ -18,11 +20,14 @@ use crate::tools::sandboxing::ToolError;
 use crate::tools::sandboxing::ToolRuntime;
 use codex_extensions::HookEvent;
 use codex_extensions::HookInput;
+use codex_extensions::HookResult;
 use codex_extensions::HookSystem;
 use codex_extensions::Settings;
 use codex_protocol::protocol::AskForApproval;
 use codex_protocol::protocol::ReviewDecision;
 use std::collections::HashMap;
+use std::path::Path;
+use std::path::PathBuf;
 
 pub(crate) struct ToolOrchestrator {
     sandbox: SandboxManager,
@@ -221,9 +226,13 @@ async fn execute_pre_tool_use_hooks(
     turn_ctx: &crate::codex::TurnContext,
     tool_input: &serde_json::Value,
 ) -> Result<(), ToolError> {
+    let project_dir = resolve_hook_settings_dir(Some(turn_ctx.cwd.as_path()));
+    if project_dir.is_none() {
+        return Ok(());
+    }
+    let project_dir = project_dir.unwrap();
     // Load settings
-    let project_dir = Some(turn_ctx.cwd.as_path());
-    let settings = match Settings::load(project_dir) {
+    let settings = match Settings::load(Some(project_dir.as_path())) {
         Ok(s) => s,
         Err(_) => return Ok(()), // No hooks configured
     };
@@ -234,7 +243,7 @@ async fn execute_pre_tool_use_hooks(
     }
 
     // Create hook system
-    let hook_system = match HookSystem::new(project_dir) {
+    let hook_system = match HookSystem::new(Some(project_dir.as_path())) {
         Ok(h) => h,
         Err(_) => return Ok(()),
     };
@@ -270,6 +279,8 @@ async fn execute_pre_tool_use_hooks(
         }
     };
 
+    record_hook_feedback(tool_ctx, turn_ctx, HookEvent::PreToolUse.as_str(), &results).await;
+
     // Check for blocking hooks
     for result in &results {
         if result.is_blocking() {
@@ -290,9 +301,13 @@ async fn execute_post_tool_use_hooks(
     tool_input: &serde_json::Value,
     tool_response: &serde_json::Value,
 ) -> Result<(), ToolError> {
+    let project_dir = resolve_hook_settings_dir(Some(turn_ctx.cwd.as_path()));
+    if project_dir.is_none() {
+        return Ok(());
+    }
+    let project_dir = project_dir.unwrap();
     // Load settings
-    let project_dir = Some(turn_ctx.cwd.as_path());
-    let settings = match Settings::load(project_dir) {
+    let settings = match Settings::load(Some(project_dir.as_path())) {
         Ok(s) => s,
         Err(_) => return Ok(()), // No hooks configured
     };
@@ -303,7 +318,7 @@ async fn execute_post_tool_use_hooks(
     }
 
     // Create hook system
-    let hook_system = match HookSystem::new(project_dir) {
+    let hook_system = match HookSystem::new(Some(project_dir.as_path())) {
         Ok(h) => h,
         Err(_) => return Ok(()),
     };
@@ -340,6 +355,14 @@ async fn execute_post_tool_use_hooks(
         }
     };
 
+    record_hook_feedback(
+        tool_ctx,
+        turn_ctx,
+        HookEvent::PostToolUse.as_str(),
+        &results,
+    )
+    .await;
+
     // Check for blocking hooks (informational for PostToolUse since tool already ran)
     for result in &results {
         if result.is_blocking() {
@@ -354,4 +377,57 @@ fn build_denial_reason_from_output(_output: &ExecToolCallOutput) -> String {
     // Keep approval reason terse and stable for UX/tests, but accept the
     // output so we can evolve heuristics later without touching call sites.
     "command failed; retry without sandbox?".to_string()
+}
+
+async fn record_hook_feedback(
+    tool_ctx: &ToolCtx<'_>,
+    turn_ctx: &crate::codex::TurnContext,
+    event_name: &str,
+    results: &[HookResult],
+) {
+    if results.is_empty() {
+        return;
+    }
+    let tool_name = &tool_ctx.tool_name;
+    let prefix = match event_name {
+        "PreToolUse" | "PostToolUse" => format!("{event_name} hook ({tool_name})"),
+        _ => format!("{event_name} hook"),
+    };
+
+    for result in results {
+        if let Some(feedback) = result.feedback() {
+            let message = format!("{prefix}: {feedback}");
+            tool_ctx
+                .session
+                .send_event(
+                    turn_ctx,
+                    EventMsg::BackgroundEvent(BackgroundEventEvent { message }),
+                )
+                .await;
+        }
+    }
+}
+
+fn resolve_hook_settings_dir(project_dir: Option<&Path>) -> Option<PathBuf> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(dir) = project_dir {
+        candidates.push(dir.to_path_buf());
+        if let Some(parent) = dir.parent() {
+            candidates.push(parent.to_path_buf());
+        }
+    } else if let Ok(dir) = std::env::current_dir() {
+        candidates.push(dir.clone());
+        if let Some(parent) = dir.parent() {
+            candidates.push(parent.to_path_buf());
+        }
+    }
+
+    for dir in candidates {
+        if dir.join(".claude/settings.json").exists()
+            || dir.join(".codexplus/settings.json").exists()
+        {
+            return Some(dir);
+        }
+    }
+    None
 }

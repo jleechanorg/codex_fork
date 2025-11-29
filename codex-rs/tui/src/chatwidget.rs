@@ -46,6 +46,7 @@ use codex_core::protocol::ViewImageToolCallEvent;
 use codex_core::protocol::WarningEvent;
 use codex_core::protocol::WebSearchBeginEvent;
 use codex_core::protocol::WebSearchEndEvent;
+use codex_extensions::execute_user_prompt_submit_hooks;
 use codex_protocol::ConversationId;
 use codex_protocol::parse_command::ParsedCommand;
 use codex_protocol::user_input::UserInput;
@@ -61,8 +62,10 @@ use ratatui::style::Stylize;
 use ratatui::text::Line;
 use ratatui::widgets::Paragraph;
 use ratatui::widgets::Wrap;
+use tokio::runtime::Handle;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
+use uuid::Uuid;
 
 use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
@@ -337,6 +340,70 @@ impl ChatWidget {
         self.bottom_pane.update_status_header(header);
     }
 
+    fn spawn_status_line_refresh(&self, show_history: bool) {
+        let app_event_tx = self.app_event_tx.clone();
+        let cwd = self.config.cwd.clone();
+        let base_header = self.current_status_header.clone();
+
+        if let Ok(handle) = Handle::try_current() {
+            handle.spawn(async move {
+                match codex_extensions::execute_status_line(Some(cwd.as_path())).await {
+                    Ok(Some(status)) => {
+                        let message = match status.mode.as_deref() {
+                            Some("prepend") if !base_header.is_empty() => {
+                                format!("{} • {}", status.text, base_header)
+                            }
+                            Some("append") if !base_header.is_empty() => {
+                                format!("{} • {}", base_header, status.text)
+                            }
+                            _ => status.text.clone(),
+                        };
+                        app_event_tx.send(AppEvent::CodexEvent(Event {
+                            id: Uuid::new_v4().to_string(),
+                            msg: EventMsg::BackgroundEvent(BackgroundEventEvent {
+                                message: message.clone(),
+                            }),
+                        }));
+                        if show_history {
+                            app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
+                                history_cell::new_info_event(
+                                    "Status line updated".to_string(),
+                                    Some(format!(
+                                        "{}{}",
+                                        status.text,
+                                        status
+                                            .mode
+                                            .as_ref()
+                                            .map(|m| format!(" (mode: {})", m))
+                                            .unwrap_or_default()
+                                    )),
+                                ),
+                            )));
+                        }
+                    }
+                    Ok(None) => {
+                        if show_history {
+                            app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
+                                history_cell::new_info_event(
+                                    "Status line".to_string(),
+                                    Some("Status line command not configured.".to_string()),
+                                ),
+                            )));
+                        }
+                    }
+                    Err(err) => {
+                        tracing::warn!("Status line refresh failed: {err}");
+                        if show_history {
+                            app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
+                                history_cell::new_error_event(format!("Status line failed: {err}")),
+                            )));
+                        }
+                    }
+                }
+            });
+        }
+    }
+
     // --- Small event handlers ---
     fn on_session_configured(&mut self, event: codex_core::protocol::SessionConfiguredEvent) {
         self.bottom_pane
@@ -359,6 +426,7 @@ impl ChatWidget {
         if let Some(user_message) = self.initial_user_message.take() {
             self.submit_user_message(user_message);
         }
+        self.spawn_status_line_refresh(false);
         if !self.suppress_session_configured_redraw {
             self.request_redraw();
         }
@@ -1429,8 +1497,6 @@ impl ChatWidget {
             return;
         }
 
-        let mut items: Vec<UserInput> = Vec::new();
-
         // Special-case: "!cmd" executes a local shell command instead of sending to the model.
         if let Some(stripped) = text.strip_prefix('!') {
             let cmd = stripped.trim();
@@ -1449,6 +1515,13 @@ impl ChatWidget {
             return;
         }
 
+        if text.trim_start().starts_with("/statusline") {
+            self.spawn_status_line_refresh(true);
+            return;
+        }
+
+        let mut items: Vec<UserInput> = Vec::new();
+
         if !text.is_empty() {
             items.push(UserInput::Text { text: text.clone() });
         }
@@ -1457,25 +1530,106 @@ impl ChatWidget {
             items.push(UserInput::LocalImage { path });
         }
 
-        self.codex_op_tx
-            .send(Op::UserInput { items })
-            .unwrap_or_else(|e| {
-                tracing::error!("failed to send message: {e}");
-            });
+        if text.is_empty() {
+            self.codex_op_tx
+                .send(Op::UserInput { items })
+                .unwrap_or_else(|e| {
+                    tracing::error!("failed to send message: {e}");
+                });
+            self.needs_final_message_separator = false;
+            return;
+        }
 
-        // Persist the text to cross-session message history.
-        if !text.is_empty() {
+        let op_tx = self.codex_op_tx.clone();
+        let app_event_tx = self.app_event_tx.clone();
+        let cwd = self.config.cwd.clone();
+        let hook_event_id = self
+            .conversation_id
+            .as_ref()
+            .map(std::string::ToString::to_string)
+            .unwrap_or_else(|| "user-prompt-submit".to_string());
+
+        let items_for_async = items.clone();
+        let text_for_async = text.clone();
+
+        let spawn_result = Handle::try_current().map(|handle| {
+            handle.spawn(async move {
+                let mut updated_items = items_for_async;
+                let mut final_text = text_for_async;
+                match execute_user_prompt_submit_hooks(
+                    &final_text,
+                    Some(cwd.as_path()),
+                    Some(hook_event_id.as_str()),
+                )
+                .await
+                {
+                    Ok(outcome) => {
+                        for result in &outcome.results {
+                            if let Some(feedback) = result.feedback() {
+                                let message = format!("UserPromptSubmit hook: {feedback}");
+                                let event = Event {
+                                    id: hook_event_id.clone(),
+                                    msg: EventMsg::BackgroundEvent(BackgroundEventEvent {
+                                        message,
+                                    }),
+                                };
+                                app_event_tx.send(AppEvent::CodexEvent(event));
+                            }
+
+                            if result.is_blocking() {
+                                let reason = result
+                                    .block_reason()
+                                    .unwrap_or_else(|| "Hook blocked execution".to_string());
+                                app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
+                                    history_cell::new_error_event(format!(
+                                        "Prompt blocked by hook: {reason}"
+                                    )),
+                                )));
+                                return;
+                            }
+                        }
+
+                        if let Some(UserInput::Text { text }) = updated_items
+                            .iter_mut()
+                            .find(|item| matches!(item, UserInput::Text { .. }))
+                        {
+                            *text = outcome.prompt.clone();
+                            final_text = outcome.prompt;
+                        }
+                    }
+                    Err(err) => {
+                        tracing::warn!("UserPromptSubmit hook execution failed: {err}");
+                    }
+                }
+
+                if let Err(e) = op_tx.send(Op::UserInput {
+                    items: updated_items,
+                }) {
+                    tracing::error!("failed to send message: {e}");
+                }
+
+                if !final_text.is_empty() {
+                    let _ = op_tx.send(Op::AddToHistory {
+                        text: final_text.clone(),
+                    });
+                    app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
+                        history_cell::new_user_prompt(final_text),
+                    )));
+                }
+            })
+        });
+
+        if spawn_result.is_err() {
+            tracing::warn!("Skipping UserPromptSubmit hooks: no Tokio runtime available");
+            if let Err(e) = self.codex_op_tx.send(Op::UserInput { items }) {
+                tracing::error!("failed to send message: {e}");
+            }
             self.codex_op_tx
                 .send(Op::AddToHistory { text: text.clone() })
-                .unwrap_or_else(|e| {
-                    tracing::error!("failed to send AddHistory op: {e}");
-                });
-        }
-
-        // Only show the text portion in conversation history.
-        if !text.is_empty() {
+                .unwrap_or_else(|e| tracing::error!("failed to send AddHistory op: {e}"));
             self.add_to_history(history_cell::new_user_prompt(text));
         }
+
         self.needs_final_message_separator = false;
     }
 

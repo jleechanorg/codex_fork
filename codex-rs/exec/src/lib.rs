@@ -47,6 +47,8 @@ use crate::event_processor::CodexStatus;
 use crate::event_processor::EventProcessor;
 use codex_core::default_client::set_default_originator;
 use codex_core::find_conversation_path_by_id_str;
+use codex_extensions::StatusLineResult;
+use codex_extensions::execute_status_line;
 
 pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()> {
     if let Err(err) = set_default_originator("codex_exec".to_string()) {
@@ -116,7 +118,13 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
     };
 
     // Execute UserPromptSubmit hooks on the original prompt
-    let prompt = execute_user_prompt_submit_hook(&prompt, cwd.as_deref()).await?;
+    let prompt = match execute_user_prompt_submit_hook(&prompt, cwd.as_deref()).await {
+        Ok(updated) => updated,
+        Err(e) => {
+            tracing::warn!("UserPromptSubmit hook failed, continuing: {e}");
+            prompt
+        }
+    };
 
     // Slash command detection and substitution on the (possibly) modified prompt
     let prompt = match detect_and_substitute_slash_command(&prompt, cwd.as_deref()) {
@@ -178,6 +186,10 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
     } else {
         None // No specific model provider override.
     };
+
+    if let Some(line) = maybe_status_line(cwd.as_deref()).await {
+        eprintln!("Status line: {line}");
+    }
 
     // Load configuration and determine approval policy
     let overrides = ConfigOverrides {
@@ -422,55 +434,38 @@ async fn execute_user_prompt_submit_hook(
     prompt: &str,
     cwd: Option<&Path>,
 ) -> anyhow::Result<String> {
-    use codex_extensions::HookEvent;
-    use codex_extensions::HookInput;
-    use codex_extensions::HookSystem;
-    use codex_extensions::Settings;
-
-    // Determine project directory
-    let current_dir_fallback = std::env::current_dir().ok();
-    let project_dir = cwd.or(current_dir_fallback.as_deref());
-
-    // Load settings to check if hooks are configured
-    let settings = match Settings::load(project_dir) {
-        Ok(s) => s,
-        Err(e) => {
-            tracing::warn!("Hook settings failed to load, skipping hooks: {}", e);
-            return Ok(prompt.to_string());
-        }
-    };
-
-    // Check if UserPromptSubmit hooks are configured
-    if !settings.hooks.contains_key("UserPromptSubmit") {
-        return Ok(prompt.to_string());
+    let debug_hooks = std::env::var("CODEX_DEBUG_HOOKS").is_ok();
+    if debug_hooks {
+        eprintln!(
+            "exec: invoking UserPromptSubmit hooks (cwd={})",
+            cwd.map(|p| p.display().to_string())
+                .unwrap_or_else(|| "<unset>".to_string())
+        );
     }
+    let session_id = std::env::var("CODEX_SESSION_ID")
+        .unwrap_or_else(|_| format!("exec-{}", std::process::id()));
 
-    // Create hook system and execute hooks
-    let hook_system = HookSystem::new(project_dir)?;
+    let outcome =
+        match codex_extensions::execute_user_prompt_submit_hooks(prompt, cwd, Some(&session_id))
+            .await
+        {
+            Ok(outcome) => outcome,
+            Err(e) => {
+                tracing::warn!("UserPromptSubmit hook execution failed: {e}");
+                return Ok(prompt.to_string());
+            }
+        };
 
-    let mut extra = std::collections::HashMap::new();
-    extra.insert(
-        "prompt".to_string(),
-        serde_json::Value::String(prompt.to_string()),
-    );
-
-    let input = HookInput {
-        session_id: std::env::var("CODEX_SESSION_ID")
-            .unwrap_or_else(|_| format!("exec-{}", std::process::id())),
-        transcript_path: String::new(), // Not available in exec mode
-        cwd: project_dir
-            .map(|p| p.display().to_string())
-            .unwrap_or_else(|| ".".to_string()),
-        hook_event_name: "UserPromptSubmit".to_string(),
-        extra,
-    };
-
-    let results = hook_system
-        .execute(HookEvent::UserPromptSubmit, input)
-        .await?;
-
-    // Check for blocking hooks
-    for result in &results {
+    if debug_hooks {
+        eprintln!(
+            "exec: UserPromptSubmit hook returned {} result(s)",
+            outcome.results.len()
+        );
+    }
+    for result in &outcome.results {
+        if let Some(feedback) = result.feedback() {
+            eprintln!("UserPromptSubmit hook: {feedback}");
+        }
         if result.is_blocking() {
             let reason = result
                 .block_reason()
@@ -480,20 +475,7 @@ async fn execute_user_prompt_submit_hook(
         }
     }
 
-    // Apply prompt modifications sequentially so each hook can build on previous changes.
-    let mut updated_prompt = prompt.to_string();
-    for result in &results {
-        if let Some(new_prompt) = result
-            .parsed_output
-            .as_ref()
-            .and_then(|o| o.prompt.as_deref())
-            .map(ToString::to_string)
-        {
-            updated_prompt = new_prompt;
-        }
-    }
-
-    Ok(updated_prompt)
+    Ok(outcome.prompt)
 }
 
 /// Detects slash commands in the prompt and substitutes them with their content.
@@ -531,6 +513,17 @@ fn detect_and_substitute_slash_command(prompt: &str, cwd: Option<&Path>) -> anyh
     } else {
         // Not a slash command, return original
         Ok(prompt.to_string())
+    }
+}
+
+async fn maybe_status_line(cwd: Option<&Path>) -> Option<String> {
+    match execute_status_line(cwd).await {
+        Ok(Some(StatusLineResult { text, .. })) if !text.trim().is_empty() => Some(text),
+        Ok(_) => None,
+        Err(err) => {
+            tracing::warn!("Status line execution failed: {err}");
+            None
+        }
     }
 }
 

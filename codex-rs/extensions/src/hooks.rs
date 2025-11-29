@@ -6,6 +6,7 @@
 use crate::error::ExtensionError;
 use crate::error::Result;
 use crate::settings::Settings;
+use crate::settings::StatusLineConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -80,6 +81,8 @@ pub struct HookOutput {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub feedback: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub hook_specific_output: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prompt: Option<String>,
@@ -92,6 +95,12 @@ pub struct HookResult {
     pub stdout: String,
     pub stderr: String,
     pub parsed_output: Option<HookOutput>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StatusLineResult {
+    pub text: String,
+    pub mode: Option<String>,
 }
 
 impl HookResult {
@@ -119,6 +128,15 @@ impl HookResult {
         } else {
             self.parsed_output.as_ref().and_then(|o| o.reason.clone())
         }
+    }
+
+    /// Extract a human-readable feedback message if provided by the hook.
+    pub fn feedback(&self) -> Option<&str> {
+        self.parsed_output
+            .as_ref()
+            .and_then(|o| o.feedback.as_deref())
+            .map(str::trim)
+            .filter(|msg| !msg.is_empty())
     }
 }
 
@@ -209,12 +227,23 @@ impl HookSystem {
     ) -> Result<HookResult> {
         // Resolve command path
         let cmd_path = self.resolve_command_path(command)?;
+        let cmd_display = cmd_path.display().to_string();
 
         // Determine how to execute (interpreter vs direct)
         let (executable, args) = self.determine_executable(&cmd_path);
 
         // Prepare input JSON
         let input_json = serde_json::to_string(input)?;
+
+        if !cmd_path.exists() {
+            tracing::warn!("Hook command missing: {cmd_display}");
+            return Ok(HookResult {
+                exit_code: 0,
+                stdout: String::new(),
+                stderr: String::new(),
+                parsed_output: None,
+            });
+        }
 
         // Spawn process
         let mut child = Command::new(&executable)
@@ -225,7 +254,9 @@ impl HookSystem {
             .current_dir(&self.project_dir)
             .env("CLAUDE_PROJECT_DIR", &self.project_dir)
             .spawn()
-            .map_err(|e| ExtensionError::HookExecutionFailed(format!("Failed to spawn: {e}")))?;
+            .map_err(|e| {
+                ExtensionError::HookExecutionFailed(format!("Failed to spawn {cmd_display}: {e}"))
+            })?;
 
         // Write input to stdin
         // Note: Some hooks may exit immediately without reading stdin, causing a broken pipe.
@@ -301,6 +332,20 @@ impl HookSystem {
         })
     }
 
+    /// Execute a status line command using the existing hook machinery.
+    pub async fn execute_status_line(&self, config: &StatusLineConfig) -> Result<HookResult> {
+        let input = HookInput {
+            session_id: String::new(),
+            transcript_path: String::new(),
+            cwd: self.project_dir.display().to_string(),
+            hook_event_name: "statusLine".to_string(),
+            extra: HashMap::new(),
+        };
+
+        self.execute_command_hook(&config.command, &input, config.timeout)
+            .await
+    }
+
     /// Resolve command path from hook configuration
     fn resolve_command_path(&self, command: &str) -> Result<PathBuf> {
         // If it's an absolute path, use it directly
@@ -315,8 +360,8 @@ impl HookSystem {
 
         // Otherwise, search in hooks directories
         let hook_dirs = [
-            self.project_dir.join(".codexplus/hooks"),
             self.project_dir.join(".claude/hooks"),
+            self.project_dir.join(".codexplus/hooks"),
         ];
 
         for dir in &hook_dirs {
@@ -383,6 +428,203 @@ impl HookSystem {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct UserPromptHookOutcome {
+    pub prompt: String,
+    pub results: Vec<HookResult>,
+}
+
+impl UserPromptHookOutcome {
+    fn unchanged(prompt: &str) -> Self {
+        Self {
+            prompt: prompt.to_string(),
+            results: Vec::new(),
+        }
+    }
+}
+
+fn resolve_hook_project_dir(project_dir: Option<&Path>) -> Option<PathBuf> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(dir) = project_dir {
+        candidates.push(dir.to_path_buf());
+        if let Some(parent) = dir.parent() {
+            candidates.push(parent.to_path_buf());
+        }
+    } else if let Ok(dir) = std::env::current_dir() {
+        candidates.push(dir.clone());
+        if let Some(parent) = dir.parent() {
+            candidates.push(parent.to_path_buf());
+        }
+    }
+
+    for dir in candidates {
+        if dir.join(".claude/settings.json").exists()
+            || dir.join(".codexplus/settings.json").exists()
+        {
+            return Some(dir);
+        }
+    }
+    None
+}
+
+/// Execute UserPromptSubmit hooks for a prompt, returning the possibly modified prompt and hook results.
+pub async fn execute_user_prompt_submit_hooks(
+    prompt: &str,
+    cwd: Option<&Path>,
+    session_id: Option<&str>,
+) -> Result<UserPromptHookOutcome> {
+    let debug_hooks = std::env::var("CODEX_DEBUG_HOOKS").is_ok();
+    let resolved_project_dir = resolve_hook_project_dir(cwd);
+    if resolved_project_dir.is_none() {
+        if debug_hooks {
+            eprintln!(
+                "UserPromptSubmit hooks skipped (no settings) for cwd: {}",
+                cwd.map(|p| p.display().to_string())
+                    .unwrap_or_else(|| "<unset>".to_string())
+            );
+        }
+        tracing::debug!("UserPromptSubmit hooks skipped: no local settings found");
+        return Ok(UserPromptHookOutcome::unchanged(prompt));
+    }
+    let resolved_project_dir = resolved_project_dir.unwrap();
+
+    let settings = match Settings::load(Some(resolved_project_dir.as_path())) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!("Hook settings failed to load, skipping hooks: {e}");
+            return Ok(UserPromptHookOutcome::unchanged(prompt));
+        }
+    };
+
+    if !settings.hooks.contains_key("UserPromptSubmit") {
+        if debug_hooks {
+            eprintln!(
+                "UserPromptSubmit hooks skipped: event not configured in {}",
+                resolved_project_dir.display()
+            );
+        }
+        tracing::debug!(
+            "UserPromptSubmit hooks skipped: no event configured in {}",
+            resolved_project_dir.display()
+        );
+        return Ok(UserPromptHookOutcome::unchanged(prompt));
+    }
+
+    tracing::debug!(
+        "Executing UserPromptSubmit hooks from {}",
+        resolved_project_dir.display()
+    );
+    let hook_system = HookSystem::new(Some(resolved_project_dir.as_path()))?;
+
+    let mut extra = HashMap::new();
+    extra.insert(
+        "prompt".to_string(),
+        serde_json::Value::String(prompt.to_string()),
+    );
+
+    let resolved_session_id = session_id
+        .map(ToOwned::to_owned)
+        .or_else(|| std::env::var("CODEX_SESSION_ID").ok())
+        .unwrap_or_else(|| format!("session-{}", std::process::id()));
+
+    let input = HookInput {
+        session_id: resolved_session_id,
+        transcript_path: String::new(),
+        cwd: cwd
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| resolved_project_dir.display().to_string()),
+        hook_event_name: HookEvent::UserPromptSubmit.as_str().to_string(),
+        extra,
+    };
+
+    let results = match hook_system
+        .execute(HookEvent::UserPromptSubmit, input)
+        .await
+    {
+        Ok(results) => results,
+        Err(e) => {
+            tracing::warn!("UserPromptSubmit hook execution failed: {e}");
+            return Ok(UserPromptHookOutcome::unchanged(prompt));
+        }
+    };
+
+    if debug_hooks {
+        eprintln!(
+            "UserPromptSubmit hooks executed: {} result(s)",
+            results.len()
+        );
+    }
+    let mut updated_prompt = prompt.to_string();
+    for result in &results {
+        if let Some(new_prompt) = result
+            .parsed_output
+            .as_ref()
+            .and_then(|o| o.prompt.as_deref())
+        {
+            updated_prompt = new_prompt.to_string();
+        }
+    }
+
+    Ok(UserPromptHookOutcome {
+        prompt: updated_prompt,
+        results,
+    })
+}
+
+/// Execute the configured status line command and return a displayable string, if any.
+pub async fn execute_status_line(cwd: Option<&Path>) -> Result<Option<StatusLineResult>> {
+    let resolved_project_dir = resolve_hook_project_dir(cwd);
+    if resolved_project_dir.is_none() {
+        return Ok(None);
+    }
+    let resolved_project_dir = resolved_project_dir.unwrap();
+
+    let settings = match Settings::load(Some(resolved_project_dir.as_path())) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!("Status line settings failed to load, skipping: {e}");
+            return Ok(None);
+        }
+    };
+
+    let Some(status_cfg) = settings.status_line else {
+        return Ok(None);
+    };
+
+    let hook_system = HookSystem::new(Some(resolved_project_dir.as_path()))?;
+    let result = match hook_system.execute_status_line(&status_cfg).await {
+        Ok(res) => res,
+        Err(e) => {
+            tracing::warn!("Status line command failed: {e}");
+            return Ok(None);
+        }
+    };
+
+    if result.exit_code != 0 {
+        tracing::warn!(
+            "Status line command exited with {} (stderr: {})",
+            result.exit_code,
+            result.stderr.trim()
+        );
+        return Ok(None);
+    }
+
+    let text = result
+        .parsed_output
+        .and_then(|o| o.feedback)
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| result.stdout.trim().to_string());
+
+    if text.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(StatusLineResult {
+        text,
+        mode: status_cfg.mode.clone(),
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -416,12 +658,31 @@ mod tests {
             parsed_output: Some(HookOutput {
                 decision: Some("block".to_string()),
                 reason: Some("Test block".to_string()),
+                feedback: None,
                 hook_specific_output: None,
                 prompt: None,
             }),
         };
         assert!(result2.is_blocking());
         assert_eq!(result2.block_reason(), Some("Test block".to_string()));
+    }
+
+    #[test]
+    fn test_hook_result_feedback_trims() {
+        let result = HookResult {
+            exit_code: 0,
+            stdout: String::new(),
+            stderr: String::new(),
+            parsed_output: Some(HookOutput {
+                decision: None,
+                reason: None,
+                feedback: Some("  hello world  ".to_string()),
+                hook_specific_output: None,
+                prompt: None,
+            }),
+        };
+
+        assert_eq!(result.feedback(), Some("hello world"));
     }
 
     #[tokio::test]

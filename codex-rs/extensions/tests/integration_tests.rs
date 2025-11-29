@@ -11,6 +11,8 @@ use codex_extensions::HookSystem;
 use codex_extensions::Settings;
 use codex_extensions::SlashCommandRegistry;
 #[cfg(unix)]
+use codex_extensions::execute_user_prompt_submit_hooks;
+#[cfg(unix)]
 use std::env;
 use tempfile::TempDir;
 
@@ -250,6 +252,66 @@ exit 2
     assert_eq!(results.len(), 1);
     assert!(results[0].is_blocking());
     assert_eq!(results[0].block_reason(), Some("Access denied".to_string()));
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn test_user_prompt_submit_hook_updates_prompt_and_feedback() {
+    let project = TempDir::new().unwrap();
+    let hooks_dir = project.path().join(".claude/hooks");
+    std::fs::create_dir_all(&hooks_dir).unwrap();
+
+    let hook_script = hooks_dir.join("prompt_hook.sh");
+    std::fs::write(
+        &hook_script,
+        r#"#!/bin/bash
+cat >/dev/null
+echo '{"prompt": "UPDATED PROMPT", "feedback": "status message"}'
+"#,
+    )
+    .unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&hook_script).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&hook_script, perms).unwrap();
+    }
+
+    let settings_file = project.path().join(".claude/settings.json");
+    std::fs::write(
+        &settings_file,
+        r#"{
+            "hooks": {
+                "UserPromptSubmit": [
+                    {
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "prompt_hook.sh",
+                                "timeout": 5
+                            }
+                        ]
+                    }
+                ]
+            }
+        }"#,
+    )
+    .unwrap();
+
+    let outcome = execute_user_prompt_submit_hooks(
+        "original prompt",
+        Some(project.path()),
+        Some("session-abc"),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(outcome.prompt, "UPDATED PROMPT");
+    assert_eq!(outcome.results.len(), 1);
+    assert_eq!(outcome.results[0].feedback(), Some("status message"));
+    assert!(!outcome.results[0].is_blocking());
 }
 
 #[test]
