@@ -34,9 +34,8 @@ jobs:
       - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.90
         with:
-          toolchain: "1.90"
           components: rustfmt, clippy
 
       - name: Run scaffolded lint script
@@ -61,9 +60,7 @@ jobs:
       - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.90"
+      - uses: dtolnay/rust-toolchain@1.90
 
       - name: Run scaffolded test script (Rust only for now)
         run: ./scripts/run_tests_with_coverage.sh --rust-only

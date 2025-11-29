@@ -57,12 +57,11 @@ jobs:
         working-directory: codex-rs
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.90
         with:
-          toolchain: "1.90"
           components: rustfmt
       - name: cargo fmt
-        run: cargo fmt -- --config imports_granularity=Item --check
+        run: cargo fmt -- --check
       - name: Verify codegen for mcp-types
         run: ./mcp-types/check_lib_rs.py
 
@@ -76,9 +75,7 @@ jobs:
         working-directory: codex-rs
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.90"
+      - uses: dtolnay/rust-toolchain@1.90
       - uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532 # v2
         with:
           tool: cargo-shear
@@ -152,9 +149,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.90
         with:
-          toolchain: "1.90"
           targets: ${{ matrix.target }}
           components: clippy
 
@@ -361,9 +357,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.90
         with:
-          toolchain: "1.90"
           targets: ${{ matrix.target }}
 
       - name: Restore cargo home cache
