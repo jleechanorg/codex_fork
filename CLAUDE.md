@@ -46,8 +46,13 @@ just clippy                    # check all clippy issues
 ```bash
 pnpm install                   # install dependencies
 pnpm format                    # check formatting
-pnpm format:fix               # fix formatting
+pnpm format:fix                # fix formatting
 ```
+
+#### NPM publish workflow
+
+- Publishing is automated via `.github/workflows/npm-publish.yml`, which runs from `codex-rs/` and expects binaries pre-staged under the package-specific `vendor/<triple>/` directories (see AGENTS.md for paths).
+- To publish locally, build and stage the artifacts, then run `npm pack`/`npm publish` from the package directory (e.g., `codex-cli/`). Configure the registry via `npm set registry` or `npm config set @codex-plus:registry <url>` as needed.
 
 ## Architecture
 
@@ -70,13 +75,13 @@ Key crates:
 
 Configuration locations (in order of precedence):
 
-1. `~/.claude/settings.json` - User global
+1. `.codexplus/settings.json` - Highest priority
 2. `.claude/settings.json` - Project
-3. `.codexplus/settings.json` - Highest priority
+3. `~/.claude/settings.json` - User global (fallback)
 
 - **Slash commands**: Markdown files in `.claude/commands/` with YAML frontmatter
 - **Hooks**: Executable scripts in `.claude/hooks/` triggered on lifecycle events (UserPromptSubmit, PreToolUse, PostToolUse, SessionStart, etc.)
-- Reference docs: Claude Code slash commands https://code.claude.com/docs/en/slash-commands ; Statusline https://code.claude.com/docs/en/statusline
+- Reference docs: [Claude Code slash commands](https://code.claude.com/docs/en/slash-commands) ; [Statusline](https://code.claude.com/docs/en/statusline)
 
 ## Code Style
 
