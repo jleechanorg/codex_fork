@@ -127,7 +127,7 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
     };
 
     // Slash command detection and substitution on the (possibly) modified prompt
-    let prompt = match detect_and_substitute_slash_command(&prompt, cwd.as_deref()).await {
+    let prompt = match detect_and_substitute_slash_command(&prompt, cwd.as_deref()) {
         Ok(substituted) => substituted,
         Err(e) => {
             tracing::warn!(
@@ -137,11 +137,6 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
             prompt // Fall back to original prompt if detection fails
         }
     };
-
-    if prompt.is_empty() {
-        // Slash command handled (e.g., /statusline); nothing further to do.
-        return Ok(());
-    }
 
     let output_schema = load_output_schema(output_schema_path);
 
@@ -484,10 +479,7 @@ async fn execute_user_prompt_submit_hook(
 }
 
 /// Detects slash commands in the prompt and substitutes them with their content.
-async fn detect_and_substitute_slash_command(
-    prompt: &str,
-    cwd: Option<&Path>,
-) -> anyhow::Result<String> {
+fn detect_and_substitute_slash_command(prompt: &str, cwd: Option<&Path>) -> anyhow::Result<String> {
     use codex_extensions::SlashCommandRegistry;
 
     // Check if this looks like a slash command
@@ -509,14 +501,6 @@ async fn detect_and_substitute_slash_command(
                 command.file_path.display()
             );
             Ok(substituted)
-        } else if cmd_name == "statusline" {
-            // Claude Code exposes /statusline as a built-in; honor it even without a .md file.
-            if let Some(line) = maybe_status_line(cwd).await {
-                eprintln!("Status line: {line}");
-                return Ok(String::new());
-            }
-            tracing::warn!("/statusline requested but no status line configuration found");
-            Ok(String::new())
         } else {
             tracing::warn!("Slash command /{cmd_name} not found in registry");
             Ok(prompt.to_string()) // Return original if command not found
