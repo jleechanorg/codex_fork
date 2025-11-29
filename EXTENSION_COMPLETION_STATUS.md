@@ -131,7 +131,6 @@ To actually use slash commands with `codex exec --yolo "/hello World"`, the foll
 ### Required CLI Integration
 
 1. **Slash Command Integration in `codex-rs/exec/src/lib.rs`:**
-
    - Around line 83-115 where prompts are processed
    - Add `SlashCommandRegistry::detect_command()` to check for `/` prefix
    - Substitute command content before sending to LLM
@@ -154,7 +153,6 @@ To actually use slash commands with `codex exec --yolo "/hello World"`, the foll
    ```
 
 2. **Hook Integration Throughout Codebase:**
-
    - **SessionStart**: In `main.rs` or early initialization
    - **UserPromptSubmit**: Before processing user input in exec/tui
    - **PreToolUse/PostToolUse**: In tool execution pipeline

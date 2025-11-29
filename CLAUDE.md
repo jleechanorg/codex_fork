@@ -56,6 +56,7 @@ pnpm format:fix               # fix formatting
 Crate names are prefixed with `codex-` (e.g., `core/` is `codex-core`).
 
 Key crates:
+
 - **core/** - Business logic, library for building Codex applications
 - **tui/** - Terminal UI built with Ratatui
 - **exec/** - Headless CLI for automation
@@ -68,6 +69,7 @@ Key crates:
 ### Extension System (this fork)
 
 Configuration locations (in order of precedence):
+
 1. `~/.claude/settings.json` - User global
 2. `.claude/settings.json` - Project
 3. `.codexplus/settings.json` - Highest priority
@@ -112,6 +114,7 @@ cargo insta accept -p codex-tui      # accept all (if intentional)
 ### Integration Tests (Core)
 
 Use utilities in `core_test_support::responses`:
+
 - `mount_sse_once` for mock SSE responses
 - `ResponseMock::single_request()` for assertions
 - Use `ev_*` constructors for SSE payloads
@@ -120,6 +123,7 @@ Use utilities in `core_test_support::responses`:
 ## Sandbox Environment
 
 Code runs sandboxed with these environment variables set:
+
 - `CODEX_SANDBOX_NETWORK_DISABLED=1` - Network is disabled
 - `CODEX_SANDBOX=seatbelt` - Running under macOS Seatbelt
 
@@ -128,6 +132,7 @@ Never modify code related to these variables - tests using them are designed for
 ## Documentation
 
 Update files in `docs/` when changing APIs. Key docs:
+
 - `docs/config.md` - Configuration reference
 - `docs/slash_commands.md` - Slash command documentation
 - `examples/claude/README.md` - Extension system examples
