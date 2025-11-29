@@ -66,35 +66,52 @@ def collect_native_components(packages: list[str]) -> set[str]:
     return components
 
 
-def resolve_release_workflow(version: str) -> dict:
-    stdout = subprocess.check_output(
-        [
-            "gh",
-            "run",
-            "list",
-            "--branch",
-            f"rust-v{version}",
-            "--json",
-            "workflowName,url,headSha",
-            "--workflow",
-            WORKFLOW_NAME,
-            "--jq",
-            "first(.[])",
-        ],
-        cwd=REPO_ROOT,
-        text=True,
-    )
-    workflow = json.loads(stdout or "null")
-    if not workflow:
-        raise RuntimeError(f"Unable to find rust-release workflow for version {version}.")
-    return workflow
+def resolve_release_workflow(version: str) -> dict | None:
+    """Resolve the rust-release workflow for a given version.
+
+    Returns None if no workflow is found (e.g., for dependency-only PRs),
+    otherwise returns the workflow metadata.
+    """
+    try:
+        stdout = subprocess.check_output(
+            [
+                "gh",
+                "run",
+                "list",
+                "--branch",
+                f"rust-v{version}",
+                "--json",
+                "workflowName,url,headSha",
+                "--workflow",
+                WORKFLOW_NAME,
+                "--jq",
+                "first(.[])",
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+        workflow = json.loads(stdout or "null")
+        if not workflow:
+            return None
+        return workflow
+    except subprocess.CalledProcessError:
+        # gh command failed (e.g., branch doesn't exist)
+        return None
 
 
-def resolve_workflow_url(version: str, override: str | None) -> tuple[str, str | None]:
+def resolve_workflow_url(version: str, override: str | None) -> tuple[str | None, str | None]:
+    """Resolve workflow URL for native component downloads.
+
+    Returns (workflow_url, head_sha) tuple. Both values may be None if this is
+    not a release build (e.g., dependency-only PR).
+    """
     if override:
         return override, None
 
     workflow = resolve_release_workflow(version)
+    if not workflow:
+        return None, None
     return workflow["url"], workflow.get("headSha")
 
 
@@ -140,6 +157,11 @@ def main() -> int:
             workflow_url, resolved_head_sha = resolve_workflow_url(
                 args.release_version, args.workflow_url
             )
+            if not workflow_url:
+                print(f"Warning: No release workflow found for version {args.release_version}.")
+                print("This is expected for dependency-only PRs. Skipping npm package staging.")
+                print("Native components required:", sorted(native_components))
+                return 0
             vendor_temp_root = Path(tempfile.mkdtemp(prefix="npm-native-", dir=runner_temp))
             install_native_components(workflow_url, native_components, vendor_temp_root)
             vendor_src = vendor_temp_root / "vendor"
