@@ -41,6 +41,7 @@ jobs:
           set -euo pipefail
           CODEX_VERSION=0.40.0
           OUTPUT_DIR="${RUNNER_TEMP}"
+          # Ensure staging failures fail the workflow so packaging errors are visible.
           python3 ./scripts/stage_npm_packages.py \
             --release-version "$CODEX_VERSION" \
             --package codex \
