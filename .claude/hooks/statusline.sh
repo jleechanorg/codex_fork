@@ -5,9 +5,9 @@
 # Read JSON payload from stdin
 INPUT=$(cat)
 
-# Parse session_id and prompt from JSON
-SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "unknown"')
-PROMPT=$(echo "$INPUT" | jq -r '.extra.user_prompt // "no prompt"' | head -c 50)
+# Parse sessionId and prompt from JSON (HookInput uses camelCase and flattens extra)
+SESSION_ID=$(echo "$INPUT" | jq -r '.sessionId // "unknown"')
+PROMPT=$(echo "$INPUT" | jq -r '.prompt // "no prompt"' | head -c 50)
 
 # Log to file for debugging
 LOG_FILE="/tmp/codex_plus_hooks.log"
