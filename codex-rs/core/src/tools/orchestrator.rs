@@ -226,11 +226,9 @@ async fn execute_pre_tool_use_hooks(
     turn_ctx: &crate::codex::TurnContext,
     tool_input: &serde_json::Value,
 ) -> Result<(), ToolError> {
-    let project_dir = resolve_hook_settings_dir(Some(turn_ctx.cwd.as_path()));
-    if project_dir.is_none() {
+    let Some(project_dir) = resolve_hook_settings_dir(Some(turn_ctx.cwd.as_path())) else {
         return Ok(());
-    }
-    let project_dir = project_dir.unwrap();
+    };
     // Load settings
     let settings = match Settings::load(Some(project_dir.as_path())) {
         Ok(s) => s,
@@ -301,11 +299,9 @@ async fn execute_post_tool_use_hooks(
     tool_input: &serde_json::Value,
     tool_response: &serde_json::Value,
 ) -> Result<(), ToolError> {
-    let project_dir = resolve_hook_settings_dir(Some(turn_ctx.cwd.as_path()));
-    if project_dir.is_none() {
+    let Some(project_dir) = resolve_hook_settings_dir(Some(turn_ctx.cwd.as_path())) else {
         return Ok(());
-    }
-    let project_dir = project_dir.unwrap();
+    };
     // Load settings
     let settings = match Settings::load(Some(project_dir.as_path())) {
         Ok(s) => s,
@@ -422,12 +418,7 @@ fn resolve_hook_settings_dir(project_dir: Option<&Path>) -> Option<PathBuf> {
         }
     }
 
-    for dir in candidates {
-        if dir.join(".claude/settings.json").exists()
-            || dir.join(".codexplus/settings.json").exists()
-        {
-            return Some(dir);
-        }
-    }
-    None
+    candidates.into_iter().find(|dir| {
+        dir.join(".claude/settings.json").exists() || dir.join(".codexplus/settings.json").exists()
+    })
 }

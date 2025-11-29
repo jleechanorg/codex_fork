@@ -151,15 +151,14 @@ echo {{"decision":"proceed","feedback":"hook-ok"}}
                 "hooks": [
                     {{
                         "type": "command",
-                        "command": "{cmd}",
+                        "command": "{hook_script_name}",
                         "timeout": 5
                     }}
                 ]
             }}
         ]
     }}
-}}"#,
-        cmd = hook_script_name
+}}"#
     );
     std::fs::write(project.path().join(".claude/settings.json"), settings).unwrap();
 

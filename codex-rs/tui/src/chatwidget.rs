@@ -360,9 +360,7 @@ impl ChatWidget {
                         };
                         app_event_tx.send(AppEvent::CodexEvent(Event {
                             id: Uuid::new_v4().to_string(),
-                            msg: EventMsg::BackgroundEvent(BackgroundEventEvent {
-                                message: message.clone(),
-                            }),
+                            msg: EventMsg::BackgroundEvent(BackgroundEventEvent { message }),
                         }));
                         if show_history {
                             app_event_tx.send(AppEvent::InsertHistoryCell(Box::new(
@@ -374,7 +372,7 @@ impl ChatWidget {
                                         status
                                             .mode
                                             .as_ref()
-                                            .map(|m| format!(" (mode: {})", m))
+                                            .map(|m| format!(" (mode: {m})"))
                                             .unwrap_or_default()
                                     )),
                                 ),
