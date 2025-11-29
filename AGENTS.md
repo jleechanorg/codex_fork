@@ -16,6 +16,7 @@ In the codex-rs folder where the rust code lives:
 - When making a change that adds or changes an API, ensure that the documentation in the `docs/` folder is up to date if applicable.
 
 ## Tools
+
 - `gh pr checks <number>` works here; prefer it to check CI status quickly.
 
 ## NPM (Codex-Plus)
