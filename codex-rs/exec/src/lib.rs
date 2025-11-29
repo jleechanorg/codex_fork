@@ -492,11 +492,7 @@ async fn detect_and_substitute_slash_command(
 
     // Check if this looks like a slash command
     if let Some((cmd_name, args)) = SlashCommandRegistry::detect_command(prompt) {
-        tracing::info!(
-            "Detected slash command: /{} with args: '{}'",
-            cmd_name,
-            args
-        );
+        tracing::info!("Detected slash command: /{cmd_name} with args: '{args}'");
 
         // Determine project directory (cwd or current dir)
         let current_dir_fallback = std::env::current_dir().ok();
@@ -509,8 +505,7 @@ async fn detect_and_substitute_slash_command(
         if let Some(command) = registry.get(&cmd_name) {
             let substituted = command.substitute_arguments(&args);
             tracing::info!(
-                "Substituted slash command /{} (from {})",
-                cmd_name,
+                "Substituted slash command /{cmd_name} (from {})",
                 command.file_path.display()
             );
             Ok(substituted)
@@ -523,7 +518,7 @@ async fn detect_and_substitute_slash_command(
             tracing::warn!("/statusline requested but no status line configuration found");
             Ok(String::new())
         } else {
-            tracing::warn!("Slash command /{} not found in registry", cmd_name);
+            tracing::warn!("Slash command /{cmd_name} not found in registry");
             Ok(prompt.to_string()) // Return original if command not found
         }
     } else {
