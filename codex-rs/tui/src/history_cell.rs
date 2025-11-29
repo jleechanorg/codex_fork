@@ -725,12 +725,12 @@ impl HistoryCell for SessionHeaderHistoryCell {
 
         let make_row = |spans: Vec<Span<'static>>| Line::from(spans);
 
-        // Title line rendered inside the box: ">_ OpenAI Codex (vX)"
+        // Title line rendered inside the box: ">_ Codex-Plus (vX-fork)"
         let title_spans: Vec<Span<'static>> = vec![
             Span::from(">_ ").dim(),
-            Span::from("OpenAI Codex").bold(),
+            Span::from("Codex-Plus").bold(),
             Span::from(" ").dim(),
-            Span::from(format!("(v{})", self.version)).dim(),
+            Span::from(format!("(v{}-fork)", self.version)).dim(),
         ];
 
         const CHANGE_MODEL_HINT_COMMAND: &str = "/model";

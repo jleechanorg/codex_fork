@@ -1,0 +1,161 @@
+name: npm-publish-codex-plus
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to npm (true/false)"
+        required: false
+        default: "false"
+  push:
+    tags:
+      - "npm/*"
+
+env:
+  NODE_VERSION: "20"
+  RUST_VERSION: "stable"
+
+jobs:
+  build-matrix:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+            use-cross: false
+          - os: macos-13
+            target: x86_64-apple-darwin
+            use-cross: false
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+            use-cross: true
+          - os: ubuntu-24.04
+            target: aarch64-unknown-linux-musl
+            use-cross: true
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            use-cross: false
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            use-cross: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install build dependencies (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-musl" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+          fi
+
+      - name: Install cross (Linux targets using musl)
+        if: matrix.use-cross == true
+        run: |
+          cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.use-cross }}" = "true" ]; then
+            cross build -p codex-cli --release --target ${{ matrix.target }}
+            cross build -p codex-responses-api-proxy --release --target ${{ matrix.target }}
+          else
+            cargo build -p codex-cli --release --target ${{ matrix.target }}
+            cargo build -p codex-responses-api-proxy --release --target ${{ matrix.target }}
+          fi
+
+      - name: Stage vendor payloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="${{ github.workspace }}/vendor-${{ matrix.target }}"
+          mkdir -p "$stage/codex-cli/vendor/${{ matrix.target }}/codex" \
+                   "$stage/codex-rs/responses-api-proxy/npm/vendor/${{ matrix.target }}/codex-responses-api-proxy"
+
+          bin_ext=""
+          if [[ "${{ matrix.target }}" == *windows* ]]; then
+            bin_ext=".exe"
+          fi
+
+          cp "codex-rs/target/${{ matrix.target }}/release/codex${bin_ext}" \
+            "$stage/codex-cli/vendor/${{ matrix.target }}/codex/codex${bin_ext}"
+          cp "codex-rs/target/${{ matrix.target }}/release/codex-responses-api-proxy${bin_ext}" \
+            "$stage/codex-rs/responses-api-proxy/npm/vendor/${{ matrix.target }}/codex-responses-api-proxy/codex-responses-api-proxy${bin_ext}"
+
+      - name: Upload vendor artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vendor-${{ matrix.target }}
+          path: vendor-${{ matrix.target }}
+
+  publish:
+    name: Publish npm packages
+    needs: build-matrix
+    runs-on: ubuntu-latest
+    if: github.event.inputs.publish == 'true' || startsWith(github.ref, 'refs/tags/npm/')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org/
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Download vendor artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: merged-vendor
+
+      - name: Merge vendor trees
+        shell: bash
+        run: |
+          set -euo pipefail
+          find merged-vendor -maxdepth 3 -type d -name "vendor-*" -print
+          shopt -s globstar
+          for dir in merged-vendor/vendor-*; do
+            cp -R "$dir"/codex-cli/vendor codex-cli/
+            cp -R "$dir"/codex-rs/responses-api-proxy/npm/vendor codex-rs/responses-api-proxy/npm/
+          done
+
+      - name: Publish CLI
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd codex-cli
+          npm pack
+          npm publish codex-plus-codex-*.tgz --access public
+
+      - name: Publish Responses API Proxy
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd codex-rs/responses-api-proxy/npm
+          npm pack
+          npm publish codex-plus-codex-responses-api-proxy-*.tgz --access public
+
+      - name: Publish TypeScript SDK
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd sdk/typescript
+          pnpm install --frozen-lockfile || npm install
+          npm pack
+          npm publish codex-plus-codex-sdk-*.tgz --access public
