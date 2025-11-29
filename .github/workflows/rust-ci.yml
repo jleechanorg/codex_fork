@@ -59,7 +59,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.90"
+          toolchain: "1.100"
           components: rustfmt
       - name: cargo fmt
         run: cargo fmt -- --config imports_granularity=Item --check
@@ -78,7 +78,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.90"
+          toolchain: "1.100"
       - uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532 # v2
         with:
           tool: cargo-shear
@@ -154,7 +154,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.90"
+          toolchain: "1.100"
           targets: ${{ matrix.target }}
           components: clippy
 
@@ -363,7 +363,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.90"
+          toolchain: "1.100"
           targets: ${{ matrix.target }}
 
       - name: Restore cargo home cache

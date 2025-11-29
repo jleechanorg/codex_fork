@@ -36,7 +36,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.90"
+          toolchain: "1.100"
           components: rustfmt, clippy
 
       - name: Run scaffolded lint script
@@ -63,7 +63,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.90"
+          toolchain: "1.100"
 
       - name: Run scaffolded test script (Rust only for now)
         run: ./scripts/run_tests_with_coverage.sh --rust-only
