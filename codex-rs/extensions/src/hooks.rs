@@ -457,14 +457,9 @@ fn resolve_hook_project_dir(project_dir: Option<&Path>) -> Option<PathBuf> {
         }
     }
 
-    for dir in candidates {
-        if dir.join(".claude/settings.json").exists()
-            || dir.join(".codexplus/settings.json").exists()
-        {
-            return Some(dir);
-        }
-    }
-    None
+    candidates.into_iter().find(|dir| {
+        dir.join(".claude/settings.json").exists() || dir.join(".codexplus/settings.json").exists()
+    })
 }
 
 /// Execute UserPromptSubmit hooks for a prompt, returning the possibly modified prompt and hook results.
