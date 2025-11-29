@@ -134,6 +134,46 @@ async fn unknown_slash_command_falls_back() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Verify that /statusline works even without a command file and does not hit the API.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn statusline_builtin_runs_without_command_file() -> anyhow::Result<()> {
+    let test = test_codex_exec();
+
+    // Provide a statusLine command in settings but no commands/ directory entry.
+    let claude_dir = test.cwd_path().join(".claude");
+    fs::create_dir_all(&claude_dir)?;
+    fs::write(
+        claude_dir.join("settings.json"),
+        r#"{
+  "statusLine": {
+    "command": "bash -c 'echo status-from-hook'",
+    "mode": "steady"
+  }
+}
+"#,
+    )?;
+
+    let server = responses::start_mock_server().await;
+
+    // Isolate from user's ~/.claude by setting HOME to test home
+    test.cmd_with_server(&server)
+        .env("HOME", test.home_path())
+        .arg("--skip-git-repo-check")
+        .arg("/statusline hello")
+        .assert()
+        .code(0);
+
+    // Slash command should have been handled locally with no API traffic.
+    let requests = server.received_requests().await.unwrap_or_default();
+    assert!(
+        requests.is_empty(),
+        "expected no API requests for /statusline, got {}",
+        requests.len()
+    );
+
+    Ok(())
+}
+
 /// Verify that slash command arguments are properly substituted.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn slash_command_arguments_substituted() -> anyhow::Result<()> {
