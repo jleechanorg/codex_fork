@@ -218,12 +218,14 @@ if __name__ == "__main__":
 ### What TO Adapt
 
 1. **Slash Command Concept**:
+
    - Markdown file format
    - Directory structure (`.claude/commands/`)
    - Command detection in user input
    - LLM instruction injection
 
 2. **Hook Concept**:
+
    - Hook lifecycle events
    - JSON stdin/stdout protocol
    - Settings.json configuration
@@ -239,12 +241,14 @@ if __name__ == "__main__":
 Instead of copying Python code, we'll:
 
 1. **Implement slash command support in Rust**:
+
    - Add command file parser (markdown + YAML frontmatter)
    - Add command detector in CLI input processing
    - Modify prompt construction to include command instructions
    - Support `.claude/commands/` directory
 
 2. **Implement hook system in Rust**:
+
    - Add hook lifecycle points in CLI
    - Add subprocess executor with JSON I/O
    - Add settings.json parser
