@@ -21,7 +21,7 @@ In the codex-rs folder where the rust code lives:
 - Git and the GitHub CLI are available in this environment. Do not assume they are blocked; if uncertain, run `git status` or `gh --version` to confirm instead of skipping steps.
 - Always default to using `gh` for PR creation/status and git for pushes when asked to publish changes.
 - If you think a tool might be restricted, verify once with a quick command, then proceed; do not rely on past sandbox assumptions.
-- Reference docs: Claude Code slash commands https://code.claude.com/docs/en/slash-commands ; Statusline https://code.claude.com/docs/en/statusline
+- Reference docs: [Claude Code slash commands](https://code.claude.com/docs/en/slash-commands) ; [Statusline](https://code.claude.com/docs/en/statusline)
 
 ## Session startup checklist
 

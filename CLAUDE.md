@@ -70,13 +70,13 @@ Key crates:
 
 Configuration locations (in order of precedence):
 
-1. `~/.claude/settings.json` - User global
+1. `.codexplus/settings.json` - Highest priority
 2. `.claude/settings.json` - Project
-3. `.codexplus/settings.json` - Highest priority
+3. `~/.claude/settings.json` - User global
 
 - **Slash commands**: Markdown files in `.claude/commands/` with YAML frontmatter
 - **Hooks**: Executable scripts in `.claude/hooks/` triggered on lifecycle events (UserPromptSubmit, PreToolUse, PostToolUse, SessionStart, etc.)
-- Reference docs: Claude Code slash commands https://code.claude.com/docs/en/slash-commands ; Statusline https://code.claude.com/docs/en/statusline
+- Reference docs: [Claude Code slash commands](https://code.claude.com/docs/en/slash-commands) ; [Statusline](https://code.claude.com/docs/en/statusline)
 
 ## Code Style
 
