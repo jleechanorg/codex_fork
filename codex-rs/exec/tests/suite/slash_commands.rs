@@ -174,6 +174,46 @@ async fn statusline_builtin_runs_without_command_file() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Verify that /statusline shows a helpful local message when statusLine is missing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn statusline_builtin_missing_config_shows_message() -> anyhow::Result<()> {
+    let test = test_codex_exec();
+
+    // No settings.json, no commands entry: simulates missing status line config.
+    let claude_dir = test.cwd_path().join(".claude");
+    fs::create_dir_all(&claude_dir)?;
+
+    let server = responses::start_mock_server().await;
+
+    let mut cmd = test.cmd_with_server(&server);
+    cmd.env("HOME", test.home_path())
+        .arg("--skip-git-repo-check")
+        .arg("/statusline hello");
+
+    // Command should succeed locally, not hit API.
+    let assert = cmd.assert().success();
+
+    // No API calls expected.
+    let requests = server.received_requests().await.unwrap_or_default();
+    assert!(
+        requests.is_empty(),
+        "expected no API requests for missing statusline config, got {}",
+        requests.len()
+    );
+
+    // Capture stderr to confirm we emitted a local message.
+    let output = assert.get_output();
+    let stderr = std::str::from_utf8(&output.stderr).unwrap_or_default();
+    assert!(
+        stderr.contains("Status line not configured")
+            || stderr.contains("status line configuration not found"),
+        "expected a local statusline warning, got stderr: {}",
+        stderr
+    );
+
+    Ok(())
+}
+
 /// Verify that slash command arguments are properly substituted.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn slash_command_arguments_substituted() -> anyhow::Result<()> {
