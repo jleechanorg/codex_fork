@@ -207,8 +207,7 @@ async fn statusline_builtin_missing_config_shows_message() -> anyhow::Result<()>
     assert!(
         stderr.contains("Status line not configured")
             || stderr.contains("status line configuration not found"),
-        "expected a local statusline warning, got stderr: {}",
-        stderr
+        "expected a local statusline warning, got stderr: {stderr}"
     );
 
     Ok(())
