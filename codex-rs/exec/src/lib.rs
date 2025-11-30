@@ -515,6 +515,8 @@ async fn detect_and_substitute_slash_command(
                 eprintln!("Status line: {line}");
                 return Ok(String::new());
             }
+            let msg = "Status line not configured (statusLine missing or hook failed)";
+            eprintln!("{msg}");
             tracing::warn!("/statusline requested but no status line configuration found");
             Ok(String::new())
         } else {
