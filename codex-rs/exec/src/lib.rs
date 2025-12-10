@@ -127,21 +127,22 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
     };
 
     // Slash command detection and substitution on the (possibly) modified prompt
-    let prompt = match detect_and_substitute_slash_command(&prompt, cwd.as_deref()).await {
-        Ok(substituted) => substituted,
-        Err(e) => {
-            tracing::warn!(
-                "Slash command detection failed; using original prompt: {}",
-                e
-            );
-            prompt // Fall back to original prompt if detection fails
-        }
-    };
+    let slash_command_outcome =
+        match detect_and_substitute_slash_command(&prompt, cwd.as_deref()).await {
+            Ok(outcome) => outcome,
+            Err(e) => {
+                tracing::warn!("Slash command detection failed; using original prompt: {e}");
+                SlashCommandResult::Prompt(prompt) // Fall back to original prompt if detection fails
+            }
+        };
 
-    if prompt.is_empty() {
-        // Slash command handled (e.g., /statusline); nothing further to do.
-        return Ok(());
-    }
+    let prompt = match slash_command_outcome {
+        SlashCommandResult::Handled => {
+            // Slash command handled (e.g., /statusline); nothing further to do.
+            return Ok(());
+        }
+        SlashCommandResult::Prompt(prompt) => prompt,
+    };
 
     let output_schema = load_output_schema(output_schema_path);
 
@@ -484,10 +485,15 @@ async fn execute_user_prompt_submit_hook(
 }
 
 /// Detects slash commands in the prompt and substitutes them with their content.
+enum SlashCommandResult {
+    Prompt(String),
+    Handled,
+}
+
 async fn detect_and_substitute_slash_command(
     prompt: &str,
     cwd: Option<&Path>,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<SlashCommandResult> {
     use codex_extensions::SlashCommandRegistry;
 
     // Check if this looks like a slash command
@@ -504,28 +510,26 @@ async fn detect_and_substitute_slash_command(
         // Try to get the command
         if let Some(command) = registry.get(&cmd_name) {
             let substituted = command.substitute_arguments(&args);
-            tracing::info!(
-                "Substituted slash command /{cmd_name} (from {})",
-                command.file_path.display()
-            );
-            Ok(substituted)
+            let path = command.file_path.display();
+            tracing::info!("Substituted slash command /{cmd_name} (from {path})");
+            Ok(SlashCommandResult::Prompt(substituted))
         } else if cmd_name == "statusline" {
             // Claude Code exposes /statusline as a built-in; honor it even without a .md file.
             if let Some(line) = maybe_status_line(cwd).await {
                 eprintln!("Status line: {line}");
-                return Ok(String::new());
+                return Ok(SlashCommandResult::Handled);
             }
             let msg = "Status line not configured (statusLine missing or hook failed)";
             eprintln!("{msg}");
             tracing::warn!("/statusline requested but no status line configuration found");
-            Ok(String::new())
+            Ok(SlashCommandResult::Handled)
         } else {
             tracing::warn!("Slash command /{cmd_name} not found in registry");
-            Ok(prompt.to_string()) // Return original if command not found
+            Ok(SlashCommandResult::Prompt(prompt.to_string())) // Return original if command not found
         }
     } else {
         // Not a slash command, return original
-        Ok(prompt.to_string())
+        Ok(SlashCommandResult::Prompt(prompt.to_string()))
     }
 }
 

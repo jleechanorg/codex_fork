@@ -146,11 +146,12 @@ async fn statusline_builtin_runs_without_command_file() -> anyhow::Result<()> {
         claude_dir.join("settings.json"),
         r#"{
   "statusLine": {
-    "command": "bash -c 'echo status-from-hook'",
-    "mode": "steady"
+      "type": "command",
+      "command": "bash -c 'echo status-from-hook'",
+      "mode": "steady"
+    }
   }
-}
-"#,
+  "#,
     )?;
 
     let server = responses::start_mock_server().await;
@@ -164,7 +165,10 @@ async fn statusline_builtin_runs_without_command_file() -> anyhow::Result<()> {
         .code(0);
 
     // Slash command should have been handled locally with no API traffic.
-    let requests = server.received_requests().await.unwrap_or_default();
+    let requests = server
+        .received_requests()
+        .await
+        .expect("failed to collect received requests from mock server");
     assert!(
         requests.is_empty(),
         "expected no API requests for /statusline, got {}",
@@ -194,7 +198,10 @@ async fn statusline_builtin_missing_config_shows_message() -> anyhow::Result<()>
     let assert = cmd.assert().success();
 
     // No API calls expected.
-    let requests = server.received_requests().await.unwrap_or_default();
+    let requests = server
+        .received_requests()
+        .await
+        .expect("failed to collect received requests from mock server");
     assert!(
         requests.is_empty(),
         "expected no API requests for missing statusline config, got {}",
