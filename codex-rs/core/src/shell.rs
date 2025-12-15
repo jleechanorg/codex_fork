@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use serde::Serialize;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum ShellType {
@@ -291,8 +292,7 @@ mod tests {
         };
 
         assert!(
-            shell_path == Path::new("/bin/bash")
-                || shell_path == Path::new("/usr/bin/bash"),
+            shell_path == Path::new("/bin/bash") || shell_path == Path::new("/usr/bin/bash"),
             "shell path: {shell_path:?}",
         );
     }
