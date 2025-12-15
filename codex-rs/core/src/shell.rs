@@ -1,6 +1,5 @@
 use serde::Deserialize;
 use serde::Serialize;
-use std::path::Path;
 use std::path::PathBuf;
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -292,7 +291,8 @@ mod tests {
         };
 
         assert!(
-            shell_path == Path::new("/bin/bash") || shell_path == Path::new("/usr/bin/bash"),
+            shell_path == std::path::Path::new("/bin/bash")
+                || shell_path == std::path::Path::new("/usr/bin/bash"),
             "shell path: {shell_path:?}",
         );
     }
