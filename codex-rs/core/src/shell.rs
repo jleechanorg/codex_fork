@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use serde::Serialize;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum ShellType {
@@ -36,7 +37,7 @@ impl Shell {
     pub fn name(&self) -> Option<String> {
         match self {
             Shell::Zsh(ZshShell { shell_path, .. }) | Shell::Bash(BashShell { shell_path, .. }) => {
-                std::path::Path::new(shell_path)
+                Path::new(shell_path)
                     .file_name()
                     .map(|s| s.to_string_lossy().to_string())
             }
@@ -291,8 +292,7 @@ mod tests {
         };
 
         assert!(
-            shell_path == Path::new("/bin/bash")
-                || shell_path == Path::new("/usr/bin/bash"),
+            shell_path == Path::new("/bin/bash") || shell_path == Path::new("/usr/bin/bash"),
             "shell path: {shell_path:?}",
         );
     }
