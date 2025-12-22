@@ -33,6 +33,7 @@ use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use serde_json::Value;
 use std::io::IsTerminal;
 use std::io::Read;
+use std::path::Path;
 use std::path::PathBuf;
 use supports_color::Stream;
 use tracing::debug;
@@ -46,6 +47,8 @@ use crate::event_processor::CodexStatus;
 use crate::event_processor::EventProcessor;
 use codex_core::default_client::set_default_originator;
 use codex_core::find_conversation_path_by_id_str;
+use codex_extensions::StatusLineResult;
+use codex_extensions::execute_status_line;
 
 pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()> {
     if let Err(err) = set_default_originator("codex_exec".to_string()) {
@@ -114,6 +117,27 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         }
     };
 
+    // Execute UserPromptSubmit hooks on the original prompt
+    let prompt = match execute_user_prompt_submit_hook(&prompt, cwd.as_deref()).await {
+        Ok(updated) => updated,
+        Err(e) => {
+            tracing::warn!("UserPromptSubmit hook failed, continuing: {e}");
+            prompt
+        }
+    };
+
+    // Slash command detection and substitution on the (possibly) modified prompt
+    let prompt = match detect_and_substitute_slash_command(&prompt, cwd.as_deref()) {
+        Ok(substituted) => substituted,
+        Err(e) => {
+            tracing::warn!(
+                "Slash command detection failed; using original prompt: {}",
+                e
+            );
+            prompt // Fall back to original prompt if detection fails
+        }
+    };
+
     let output_schema = load_output_schema(output_schema_path);
 
     let (stdout_with_ansi, stderr_with_ansi) = match color {
@@ -162,6 +186,10 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
     } else {
         None // No specific model provider override.
     };
+
+    if let Some(line) = maybe_status_line(cwd.as_deref()).await {
+        eprintln!("Status line: {line}");
+    }
 
     // Load configuration and determine approval policy
     let overrides = ConfigOverrides {
@@ -398,6 +426,104 @@ async fn resolve_resume_path(
         Ok(path)
     } else {
         Ok(None)
+    }
+}
+
+/// Executes UserPromptSubmit hooks and applies any modifications to the prompt.
+async fn execute_user_prompt_submit_hook(
+    prompt: &str,
+    cwd: Option<&Path>,
+) -> anyhow::Result<String> {
+    let debug_hooks = std::env::var("CODEX_DEBUG_HOOKS").is_ok();
+    if debug_hooks {
+        eprintln!(
+            "exec: invoking UserPromptSubmit hooks (cwd={})",
+            cwd.map(|p| p.display().to_string())
+                .unwrap_or_else(|| "<unset>".to_string())
+        );
+    }
+    let session_id = std::env::var("CODEX_SESSION_ID")
+        .unwrap_or_else(|_| format!("exec-{}", std::process::id()));
+
+    let outcome =
+        match codex_extensions::execute_user_prompt_submit_hooks(prompt, cwd, Some(&session_id))
+            .await
+        {
+            Ok(outcome) => outcome,
+            Err(e) => {
+                tracing::warn!("UserPromptSubmit hook execution failed: {e}");
+                return Ok(prompt.to_string());
+            }
+        };
+
+    if debug_hooks {
+        eprintln!(
+            "exec: UserPromptSubmit hook returned {} result(s)",
+            outcome.results.len()
+        );
+    }
+    for result in &outcome.results {
+        if let Some(feedback) = result.feedback() {
+            eprintln!("UserPromptSubmit hook: {feedback}");
+        }
+        if result.is_blocking() {
+            let reason = result
+                .block_reason()
+                .unwrap_or_else(|| "Hook blocked execution".to_string());
+            eprintln!("Hook blocked execution: {reason}");
+            std::process::exit(1);
+        }
+    }
+
+    Ok(outcome.prompt)
+}
+
+/// Detects slash commands in the prompt and substitutes them with their content.
+fn detect_and_substitute_slash_command(prompt: &str, cwd: Option<&Path>) -> anyhow::Result<String> {
+    use codex_extensions::SlashCommandRegistry;
+
+    // Check if this looks like a slash command
+    if let Some((cmd_name, args)) = SlashCommandRegistry::detect_command(prompt) {
+        tracing::info!(
+            "Detected slash command: /{} with args: '{}'",
+            cmd_name,
+            args
+        );
+
+        // Determine project directory (cwd or current dir)
+        let current_dir_fallback = std::env::current_dir().ok();
+        let project_dir = cwd.or(current_dir_fallback.as_deref());
+
+        // Load slash commands from .claude/.codexplus directories
+        let registry = SlashCommandRegistry::load(project_dir)?;
+
+        // Try to get the command
+        if let Some(command) = registry.get(&cmd_name) {
+            let substituted = command.substitute_arguments(&args);
+            tracing::info!(
+                "Substituted slash command /{} (from {})",
+                cmd_name,
+                command.file_path.display()
+            );
+            Ok(substituted)
+        } else {
+            tracing::warn!("Slash command /{} not found in registry", cmd_name);
+            Ok(prompt.to_string()) // Return original if command not found
+        }
+    } else {
+        // Not a slash command, return original
+        Ok(prompt.to_string())
+    }
+}
+
+async fn maybe_status_line(cwd: Option<&Path>) -> Option<String> {
+    match execute_status_line(cwd).await {
+        Ok(Some(StatusLineResult { text, .. })) if !text.trim().is_empty() => Some(text),
+        Ok(_) => None,
+        Err(err) => {
+            tracing::warn!("Status line execution failed: {err}");
+            None
+        }
     }
 }
 

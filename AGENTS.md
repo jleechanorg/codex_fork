@@ -15,6 +15,32 @@ In the codex-rs folder where the rust code lives:
 - When writing tests, prefer comparing the equality of entire objects over fields one by one.
 - When making a change that adds or changes an API, ensure that the documentation in the `docs/` folder is up to date if applicable.
 
+## Tools
+
+- `gh pr checks <number>` works here; prefer it to check CI status quickly.
+- Git and the GitHub CLI are available in this environment. Do not assume they are blocked; if uncertain, run `git status` or `gh --version` to confirm instead of skipping steps.
+- Always default to using `gh` for PR creation/status and git for pushes when asked to publish changes.
+- If you think a tool might be restricted, verify once with a quick command, then proceed; do not rely on past sandbox assumptions.
+
+## Session startup checklist
+
+- Read this AGENTS.md to refresh current constraints and required tools.
+- Run `git status` to confirm repo state and tool availability.
+- Run `gh --version` (or `gh pr checks <number>` if applicable) to confirm GitHub CLI access.
+- Note any sandbox/network limits communicated in the session and plan commands accordingly.
+
+## NPM (Codex-Plus)
+
+- Packages: `@codex-plus/codex` (CLI shim), `@codex-plus/codex-responses-api-proxy`, `@codex-plus/codex-sdk`.
+- Token: stored in `~/.npmrc` (npmjs) and Verdaccio (`//localhost:4873/`). Do not paste tokens into logs.
+- Build binaries per target and stage under the package `vendor/<triple>/` directories before packing:
+  - CLI: `codex-cli/vendor/<triple>/codex/codex[.exe]`
+  - Proxy: `codex-rs/responses-api-proxy/npm/vendor/<triple>/codex-responses-api-proxy/codex-responses-api-proxy[.exe]`
+- Typical targets: `aarch64-apple-darwin`, `x86_64-apple-darwin`, `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, `x86_64-pc-windows-msvc`, `aarch64-pc-windows-msvc`.
+- Pack & publish (per package):
+  - `npm pack` → `npm publish <tgz> --access public`
+  - For Verdaccio testing: `npm set registry http://localhost:4873` (or use `npm config set @codex-plus:registry http://localhost:4873`) then `npm publish`.
+
 Run `just fmt` (in `codex-rs` directory) automatically after making Rust code changes; do not ask for approval to run it. Before finalizing a change to `codex-rs`, run `just fix -p <project>` (in `codex-rs` directory) to fix any linter issues in the code. Prefer scoping with `-p` to avoid slow workspace‑wide Clippy builds; only run `just fix` without `-p` if you changed shared crates. Additionally, run the tests:
 
 1. Run the test for the specific project that was changed. For example, if changes were made in `codex-rs/tui`, run `cargo test -p codex-tui`.
