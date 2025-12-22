@@ -4,7 +4,16 @@
   "description": "Tools for repo-wide maintenance.",
   "scripts": {
     "format": "prettier --check *.json *.md docs/*.md .github/workflows/*.yml **/*.js",
-    "format:fix": "prettier --write *.json *.md docs/*.md .github/workflows/*.yml **/*.js"
+    "format:fix": "prettier --write *.json *.md docs/*.md .github/workflows/*.yml **/*.js",
+    "scaffold:lint": "./scripts/run_lint.sh",
+    "scaffold:test": "./scripts/run_tests_with_coverage.sh",
+    "scaffold:test:rust": "./scripts/run_tests_with_coverage.sh --rust-only",
+    "scaffold:test:node": "./scripts/run_tests_with_coverage.sh --node-only",
+    "scaffold:coverage": "./scripts/coverage.sh",
+    "scaffold:coverage:generate": "./scripts/coverage.sh --generate",
+    "scaffold:loc": "./scripts/loc.sh",
+    "scaffold:push": "./scripts/push.sh",
+    "scaffold:sync": "./scripts/sync_branch.sh"
   },
   "devDependencies": {
     "prettier": "^3.5.3"
