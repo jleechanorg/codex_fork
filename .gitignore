@@ -40,6 +40,9 @@ AGENTS.override.md
 .nyc_output/
 .jest/
 *.tsbuildinfo
+__pycache__/
+*.pyc
+*.pyo
 
 # logs
 *.log
