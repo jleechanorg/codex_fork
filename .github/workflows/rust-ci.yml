@@ -61,7 +61,7 @@ jobs:
         with:
           components: rustfmt
       - name: cargo fmt
-        run: cargo fmt -- --config imports_granularity=Item --check
+        run: cargo fmt -- --check
       - name: Verify codegen for mcp-types
         run: ./mcp-types/check_lib_rs.py
 
@@ -187,6 +187,7 @@ jobs:
             echo "SCCACHE_DIR=${{ github.workspace }}/.sccache" >> "$GITHUB_ENV"
             echo "Using sccache local disk + actions/cache fallback"
           fi
+          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
 
       - name: Enable sccache wrapper
         if: ${{ env.USE_SCCACHE == 'true' }}
@@ -393,6 +394,7 @@ jobs:
             echo "SCCACHE_DIR=${{ github.workspace }}/.sccache" >> "$GITHUB_ENV"
             echo "Using sccache local disk + actions/cache fallback"
           fi
+          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
 
       - name: Enable sccache wrapper
         if: ${{ env.USE_SCCACHE == 'true' }}
