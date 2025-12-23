@@ -12,7 +12,6 @@ use wiremock::MockServer;
 use wiremock::ResponseTemplate;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
-
 /// Tests streaming chat completions through the CLI using a mock server.
 /// This test:
 /// 1. Sets up a mock server that simulates OpenAI's chat completions API
@@ -93,6 +92,127 @@ async fn chat_mode_stream_cli() {
     assert!(
         head0.get("timestamp").is_some(),
         "head[0] missing timestamp"
+    );
+}
+
+/// Verify hook feedback is surfaced as a background event (status line/exec output) and hook script runs.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn hook_feedback_emits_background_event() {
+    skip_if_no_network!();
+
+    let project = TempDir::new().unwrap();
+    let claude_hooks = project.path().join(".claude/hooks");
+    std::fs::create_dir_all(&claude_hooks).unwrap();
+
+    let hook_log = project.path().join("hook.log");
+
+    #[cfg(not(windows))]
+    let hook_script_name = "status_hook.sh";
+    #[cfg(windows)]
+    let hook_script_name = "status_hook.cmd";
+
+    #[cfg(not(windows))]
+    let hook_script = format!(
+        r#"#!/bin/bash
+cat >/dev/null
+echo "hook ran" >> "{log}"
+echo '{{"decision":"proceed","feedback":"hook-ok"}}'
+"#,
+        log = hook_log.display()
+    );
+
+    #[cfg(windows)]
+    let hook_script = format!(
+        r#"@echo off
+type nul >NUL
+echo hook ran>>"{log}"
+echo {{"decision":"proceed","feedback":"hook-ok"}}
+"#,
+        log = hook_log.display()
+    );
+
+    let hook_path = claude_hooks.join(hook_script_name);
+    std::fs::write(&hook_path, hook_script).unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&hook_path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&hook_path, perms).unwrap();
+    }
+
+    let settings = format!(
+        r#"{{
+    "hooks": {{
+        "UserPromptSubmit": [
+            {{
+                "matcher": "*",
+                "hooks": [
+                    {{
+                        "type": "command",
+                        "command": "{hook_script_name}",
+                        "timeout": 5
+                    }}
+                ]
+            }}
+        ]
+    }}
+}}"#
+    );
+    std::fs::write(project.path().join(".claude/settings.json"), settings).unwrap();
+
+    let server = MockServer::start().await;
+    let sse = concat!(
+        "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp-1\"}}\n\n",
+        "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp-1\"}}\n\n"
+    );
+    let _resp_mock = core_test_support::responses::mount_sse_once(&server, sse.to_string()).await;
+
+    let provider_override = format!(
+        "model_providers.mock={{ name = \"mock\", base_url = \"{}/v1\", env_key = \"PATH\", wire_api = \"responses\" }}",
+        server.uri()
+    );
+
+    let home = project.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+
+    let bin = cargo_bin("codex");
+    let mut cmd = AssertCommand::new(bin);
+    cmd.arg("exec")
+        .arg("--skip-git-repo-check")
+        .arg("-c")
+        .arg(&provider_override)
+        .arg("-c")
+        .arg("model_provider=\"mock\"")
+        .arg("-C")
+        .arg(project.path())
+        .arg("hello from hook");
+    cmd.env("CODEX_HOME", &home)
+        .env("OPENAI_API_KEY", "dummy")
+        .env("OPENAI_BASE_URL", format!("{}/v1", server.uri()));
+
+    let output = cmd.output().unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "exec failed: {}\nstdout:\n{}\nstderr:\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        stderr
+    );
+
+    assert!(
+        stderr.contains("UserPromptSubmit hook: hook-ok"),
+        "expected hook feedback in stderr, got:\n{stderr}"
+    );
+
+    let log_contents = std::fs::read_to_string(&hook_log)
+        .unwrap_or_else(|e| panic!("missing hook log {}: {e}", hook_log.display()));
+    assert!(
+        log_contents.contains("hook ran"),
+        "expected hook log to record execution, got: {log_contents}"
     );
 }
 

@@ -1,0 +1,82 @@
+name: scaffold-ci
+
+# Optional CI workflow demonstrating scaffolded development scripts
+# This workflow is separate from the main rust-ci.yml to avoid interference
+# Enable by uncommenting the 'on' triggers below
+
+# on:
+#   pull_request: {}
+#   push:
+#     branches:
+#       - main
+#   workflow_dispatch:
+
+on:
+  workflow_dispatch: # Manual trigger only for now
+
+jobs:
+  scaffolded-lint:
+    name: Run Scaffolded Lint Script
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - uses: dtolnay/rust-toolchain@1.90
+        with:
+          components: rustfmt, clippy
+
+      - name: Run scaffolded lint script
+        run: ./scripts/run_lint.sh
+
+  scaffolded-tests:
+    name: Run Scaffolded Test Script
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - uses: dtolnay/rust-toolchain@1.90
+
+      - name: Run scaffolded test script (Rust only for now)
+        run: ./scripts/run_tests_with_coverage.sh --rust-only
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-reports
+          path: coverage/
+
+  scaffolded-loc:
+    name: Generate Lines of Code Report
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Run LOC script
+        run: ./scripts/loc.sh
