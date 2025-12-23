@@ -39,6 +39,9 @@ AGENTS.override.md
 .nyc_output/
 .jest/
 *.tsbuildinfo
+__pycache__/
+*.py[cod]
+*$py.class
 
 # logs
 *.log
