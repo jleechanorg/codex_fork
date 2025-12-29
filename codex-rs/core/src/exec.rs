@@ -673,11 +673,17 @@ fn kill_child_process_group(child: &mut Child) -> io::Result<()> {
 
     if let Some(pid) = child.id() {
         let pid = pid as libc::pid_t;
+        #[cfg(target_os = "linux")]
+        let descendants = collect_descendants(pid);
         let pgid = unsafe { libc::getpgid(pid) };
         if pgid == -1 {
             let err = std::io::Error::last_os_error();
             if err.kind() != ErrorKind::NotFound {
                 return Err(err);
+            }
+            #[cfg(target_os = "linux")]
+            {
+                kill_descendants(&descendants);
             }
             return Ok(());
         }
@@ -689,9 +695,67 @@ fn kill_child_process_group(child: &mut Child) -> io::Result<()> {
                 return Err(err);
             }
         }
+
+        #[cfg(target_os = "linux")]
+        {
+            kill_descendants(&descendants);
+        }
     }
 
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn collect_descendants(root_pid: libc::pid_t) -> Vec<libc::pid_t> {
+    use std::collections::VecDeque;
+
+    let mut descendants = Vec::new();
+    let mut queue = VecDeque::new();
+    queue.push_back(root_pid);
+
+    while let Some(parent_pid) = queue.pop_front() {
+        let Ok(entries) = std::fs::read_dir("/proc") else {
+            break;
+        };
+
+        for entry in entries.flatten() {
+            let pid: libc::pid_t = match entry.file_name().to_string_lossy().parse() {
+                Ok(pid) => pid,
+                Err(_) => continue,
+            };
+
+            if pid == root_pid || descendants.contains(&pid) {
+                continue;
+            }
+
+            let status_path = entry.path().join("status");
+            let Ok(status) = std::fs::read_to_string(status_path) else {
+                continue;
+            };
+
+            let ppid = status
+                .lines()
+                .find(|line| line.starts_with("PPid:"))
+                .and_then(|line| line.split_whitespace().nth(1))
+                .and_then(|value| value.parse::<libc::pid_t>().ok());
+
+            if Some(parent_pid) == ppid {
+                descendants.push(pid);
+                queue.push_back(pid);
+            }
+        }
+    }
+
+    descendants
+}
+
+#[cfg(target_os = "linux")]
+fn kill_descendants(descendants: &[libc::pid_t]) {
+    for &pid in descendants {
+        unsafe {
+            libc::kill(pid, libc::SIGKILL);
+        }
+    }
 }
 
 #[cfg(not(unix))]
@@ -804,10 +868,21 @@ mod tests {
         })?;
 
         let mut killed = false;
-        for _ in 0..20 {
-            // Use kill(pid, 0) to check if the process is alive.
+        for _ in 0..50 {
+            // Use kill(pid, 0) to check if the process is alive. If it has
+            // already been reaped or is a zombie, treat it as terminated.
             if unsafe { libc::kill(pid, 0) } == -1
                 && let Some(libc::ESRCH) = std::io::Error::last_os_error().raw_os_error()
+            {
+                killed = true;
+                break;
+            }
+
+            if let Ok(status) = std::fs::read_to_string(format!("/proc/{pid}/status"))
+                && status
+                    .lines()
+                    .find(|line| line.starts_with("State:"))
+                    .is_some_and(|line| line.contains('Z'))
             {
                 killed = true;
                 break;
