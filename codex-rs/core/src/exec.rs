@@ -681,6 +681,10 @@ fn kill_child_process_group(child: &mut Child) -> io::Result<()> {
             if err.kind() != ErrorKind::NotFound {
                 return Err(err);
             }
+            #[cfg(target_os = "linux")]
+            {
+                kill_descendants(&descendants);
+            }
             return Ok(());
         }
 
