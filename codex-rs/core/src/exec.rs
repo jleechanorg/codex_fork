@@ -874,15 +874,14 @@ mod tests {
                 break;
             }
 
-            if let Ok(status) = std::fs::read_to_string(format!("/proc/{pid}/status")) {
-                if status
+            if let Ok(status) = std::fs::read_to_string(format!("/proc/{pid}/status"))
+                && status
                     .lines()
                     .find(|line| line.starts_with("State:"))
                     .is_some_and(|line| line.contains('Z'))
-                {
-                    killed = true;
-                    break;
-                }
+            {
+                killed = true;
+                break;
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
