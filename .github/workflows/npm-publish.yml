@@ -19,6 +19,9 @@ jobs:
   build-matrix:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: codex-rs
     strategy:
       fail-fast: false
       matrix:
@@ -79,6 +82,7 @@ jobs:
 
       - name: Stage vendor payloads
         shell: bash
+        working-directory: ${{ github.workspace }}
         run: |
           set -euo pipefail
           stage="${{ github.workspace }}/vendor-${{ matrix.target }}"

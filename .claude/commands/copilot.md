@@ -15,8 +15,20 @@ Optional behaviors inspired by /copilot:
 
 Get PR context and start timing:
 ```bash
-# Get PR number from arguments or current context
-pr_num="${ARGUMENTS:-$(gh pr view --json number -q .number 2>/dev/null || echo "2")}"
+# Determine PR number from argument, env, or current PR context
+if [ -n "${ARGUMENTS:-}" ]; then
+  pr_num="$ARGUMENTS"
+elif [ -n "${GITHUB_PR_NUMBER:-}" ]; then
+  pr_num="$GITHUB_PR_NUMBER"
+else
+  pr_num="$(gh pr view --json number -q .number 2>/dev/null || echo "")"
+fi
+
+if [ -z "$pr_num" ]; then
+  echo "❌ Unable to determine PR number. Pass the PR number as an argument or set GITHUB_PR_NUMBER."
+  exit 1
+fi
+
 echo "🎯 Processing PR #$pr_num"
 
 # Record start time
@@ -110,13 +122,18 @@ for i in $(seq 0 $((original_count - 1))); do
   line=$(echo "$comment" | jq -r '.line // 0')
   
   # Categorize by content patterns
-  if echo "$body" | grep -iE "security|vulnerability|injection|unsafe" > /dev/null; then
-    security_issues="$security_issues\n🔴 SECURITY [$path:$line]: ${body:0:100}..."
-    had_actionable=1
-  elif echo "$body" | grep -iE "bug|error|fail|crash|undefined|null" > /dev/null; then
+  if echo "$body" | grep -qiE "security|vulnerability|injection|unsafe"; then
+    if ! echo "$body" | grep -qiE "not (a )?security|no security issue"; then
+      security_issues="$security_issues\n🔴 SECURITY [$path:$line]: ${body:0:100}..."
+      had_actionable=1
+      continue
+    fi
+  fi
+
+  if echo "$body" | grep -qiE "bug|error|fail|crash|undefined|null"; then
     bug_issues="$bug_issues\n🟡 BUG [$path:$line]: ${body:0:100}..."
     had_actionable=1
-  elif echo "$body" | grep -iE "style|format|naming|convention" > /dev/null; then
+  elif echo "$body" | grep -qiE "style|format|naming|convention"; then
     style_issues="$style_issues\n🔵 STYLE [$path:$line]: ${body:0:100}..."
   fi
 done
@@ -247,12 +264,15 @@ fi
  
 # Persist key metrics for later phases
 BRANCH_NAME=$(git branch --show-current)
-mkdir -p "/tmp/$BRANCH_NAME"
+STATE_ROOT="${XDG_RUNTIME_DIR:-$HOME/.cache}/copilot_state"
+STATE_DIR="$STATE_ROOT/$BRANCH_NAME"
+mkdir -p "$STATE_ROOT" "$STATE_DIR"
+chmod 700 "$STATE_ROOT" "$STATE_DIR" 2>/dev/null || true
 {
   echo "ORIGINAL_COUNT=$original_count"
   echo "REPLY_COUNT=$reply_count"
   echo "COVERAGE_STR=$coverage_str"
-} > "/tmp/$BRANCH_NAME/copilot_state.env"
+} > "$STATE_DIR/copilot_state.env"
 ```
 
 ## 📤 Phase 7: Commit and Push
@@ -266,8 +286,11 @@ if [ -n "$(git diff --stat 2>/dev/null)" ]; then
   git add -A
 
   BRANCH_NAME=$(git branch --show-current)
-  mkdir -p "/tmp/$BRANCH_NAME"
-  commit_msg="/tmp/$BRANCH_NAME/commit_message.txt"
+  STATE_ROOT="${XDG_RUNTIME_DIR:-$HOME/.cache}/copilot_state"
+  STATE_DIR="$STATE_ROOT/$BRANCH_NAME"
+  mkdir -p "$STATE_ROOT" "$STATE_DIR"
+  chmod 700 "$STATE_ROOT" "$STATE_DIR" 2>/dev/null || true
+  commit_msg="$STATE_DIR/commit_message.txt"
   {
     echo "fix: address PR #$pr_num review comments"
     echo
@@ -280,7 +303,7 @@ if [ -n "$(git diff --stat 2>/dev/null)" ]; then
     echo
     echo "FILE JUSTIFICATION PROTOCOL"
     echo "==========================="
-    for f in $(git diff --name-only); do
+    for f in $(git diff --cached --name-only); do
       echo "- File: $f"
       echo "  Goal: Address reviewer feedback and improve quality"
       echo "  Modification: Changes applied in context of PR comments"
@@ -331,9 +354,11 @@ echo "🎯 Next steps: Review changes and merge when ready"
 # Also post a summary as an issue comment for auditability
 echo -e "\n📝 Posting coverage summary as issue comment..."
 tag=${tag:-"[AI Responder codex]"}
-if [ -f "/tmp/$BRANCH_NAME/copilot_state.env" ]; then
+STATE_ROOT="${XDG_RUNTIME_DIR:-$HOME/.cache}/copilot_state"
+STATE_DIR="$STATE_ROOT/$BRANCH_NAME"
+if [ -f "$STATE_DIR/copilot_state.env" ]; then
   # shellcheck disable=SC1090
-  . "/tmp/$BRANCH_NAME/copilot_state.env"
+  . "$STATE_DIR/copilot_state.env"
 fi
 summary_body="$tag PR Comment Coverage Summary\n\n- Review comments: $review_count\n- Issue comments: $issue_count\n- Original comments: ${ORIGINAL_COUNT:-$original_count}\n- Replies posted: ${REPLY_COUNT:-$reply_count}\n- Coverage: ${COVERAGE_STR:-$coverage_str}\n- Duration: ${minutes}m ${seconds}s\n\n🤖 Automated by Codex Plus /copilot"
 gh api "repos/$owner/$repo/issues/$pr_num/comments" \

@@ -8,6 +8,7 @@ use crate::error::Result;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -139,16 +140,44 @@ impl SlashCommandRegistry {
     /// Searches .codexplus/commands/ then .claude/commands/
     pub fn load(project_dir: Option<&Path>) -> Result<Self> {
         let mut registry = Self::new();
-        let base_dir = project_dir.unwrap_or_else(|| Path::new("."));
+        let mut roots: Vec<PathBuf> = Vec::new();
 
-        let command_dirs = [
-            base_dir.join(".codexplus/commands"),
-            base_dir.join(".claude/commands"),
-        ];
+        // Add project dir and its ancestors (closest first)
+        if let Some(dir) = project_dir {
+            let mut current = Some(dir);
+            while let Some(path) = current {
+                roots.push(path.to_path_buf());
+                current = path.parent();
+            }
+        } else if let Ok(cwd) = std::env::current_dir() {
+            let mut current = Some(cwd.as_path());
+            while let Some(path) = current {
+                roots.push(path.to_path_buf());
+                current = path.parent();
+            }
+        } else {
+            roots.push(PathBuf::from("."));
+        }
 
-        for dir in &command_dirs {
-            if dir.exists() && dir.is_dir() {
-                registry.load_from_directory(dir)?;
+        // Add home directory
+        if let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
+            roots.push(PathBuf::from(home));
+        }
+
+        // Deduplicate while preserving first-seen order
+        let mut seen: HashSet<PathBuf> = HashSet::new();
+        roots.retain(|path| seen.insert(path.clone()));
+
+        for root in roots {
+            let command_dirs = [
+                root.join(".codexplus/commands"),
+                root.join(".claude/commands"),
+            ];
+
+            for dir in &command_dirs {
+                if dir.exists() && dir.is_dir() {
+                    registry.load_from_directory(dir)?;
+                }
             }
         }
 
@@ -364,11 +393,93 @@ Codexplus version
         )
         .unwrap();
 
+        let empty_home = temp_dir.path().join("empty_home");
+        std::fs::create_dir_all(&empty_home).unwrap();
+        let old_home = std::env::var_os("HOME");
+        unsafe {
+            std::env::set_var("HOME", &empty_home);
+        }
+
         let registry = SlashCommandRegistry::load(Some(temp_dir.path())).unwrap();
+
+        if let Some(val) = old_home {
+            unsafe {
+                std::env::set_var("HOME", val);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var("HOME");
+            }
+        }
 
         // Should have codexplus version (higher precedence)
         let cmd = registry.get("hello").unwrap();
         assert!(cmd.content.contains("Codexplus version"));
+    }
+
+    #[test]
+    fn test_load_searches_parent_directories() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+        let commands_dir = root.join(".claude/commands");
+        std::fs::create_dir_all(&commands_dir).unwrap();
+
+        let cmd_path = commands_dir.join("parent.md");
+        std::fs::write(
+            &cmd_path,
+            r#"---
+name: parent-cmd
+description: from parent
+---
+parent body
+"#,
+        )
+        .unwrap();
+
+        let nested = root.join("nested/deeper");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        let registry = SlashCommandRegistry::load(Some(&nested)).unwrap();
+        assert!(registry.get("parent-cmd").is_some());
+    }
+
+    #[test]
+    fn test_load_searches_home_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let home = temp_dir.path().join("home");
+        let commands_dir = home.join(".claude/commands");
+        std::fs::create_dir_all(&commands_dir).unwrap();
+
+        let cmd_path = commands_dir.join("home.md");
+        std::fs::write(
+            &cmd_path,
+            r#"---
+name: home-cmd
+description: from home
+---
+home body
+"#,
+        )
+        .unwrap();
+
+        let old_home = std::env::var_os("HOME");
+        unsafe {
+            std::env::set_var("HOME", &home);
+        }
+
+        let registry = SlashCommandRegistry::load(Some(temp_dir.path())).unwrap();
+
+        if let Some(val) = old_home {
+            unsafe {
+                std::env::set_var("HOME", val);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var("HOME");
+            }
+        }
+
+        assert!(registry.get("home-cmd").is_some());
     }
 
     #[test]
