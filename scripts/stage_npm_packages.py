@@ -66,35 +66,56 @@ def collect_native_components(packages: list[str]) -> set[str]:
     return components
 
 
-def resolve_release_workflow(version: str) -> dict:
-    stdout = subprocess.check_output(
-        [
-            "gh",
-            "run",
-            "list",
-            "--branch",
-            f"rust-v{version}",
-            "--json",
-            "workflowName,url,headSha",
-            "--workflow",
-            WORKFLOW_NAME,
-            "--jq",
-            "first(.[])",
-        ],
-        cwd=REPO_ROOT,
-        text=True,
-    )
+def resolve_release_workflow(version: str) -> dict | None:
+    """Resolve the rust-release workflow for a given version.
+
+    Returns None if no workflow is found (e.g., for dependency-only PRs),
+    otherwise returns the workflow metadata.
+    """
+    try:
+        stdout = subprocess.check_output(
+            [
+                "gh",
+                "run",
+                "list",
+                "--branch",
+                f"rust-v{version}",
+                "--json",
+                "workflowName,url,headSha",
+                "--workflow",
+                WORKFLOW_NAME,
+                "--jq",
+                "first(.[])",
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+            stderr=subprocess.PIPE,
+        )
+    except subprocess.CalledProcessError as exc:
+        error_output = exc.stderr.strip() if exc.stderr else "<no stderr>"
+        raise RuntimeError(
+            "Failed to query release workflow via gh: "
+            f"{error_output} (exit code {exc.returncode})"
+        ) from exc
+
     workflow = json.loads(stdout or "null")
     if not workflow:
-        raise RuntimeError(f"Unable to find rust-release workflow for version {version}.")
+        return None
     return workflow
 
 
-def resolve_workflow_url(version: str, override: str | None) -> tuple[str, str | None]:
+def resolve_workflow_url(version: str, override: str | None) -> tuple[str | None, str | None]:
+    """Resolve workflow URL for native component downloads.
+
+    Returns (workflow_url, head_sha) tuple. Both values may be None if this is
+    not a release build (e.g., dependency-only PR).
+    """
     if override:
         return override, None
 
     workflow = resolve_release_workflow(version)
+    if not workflow:
+        return None, None
     return workflow["url"], workflow.get("headSha")
 
 
@@ -133,13 +154,21 @@ def main() -> int:
     vendor_src: Path | None = None
     resolved_head_sha: str | None = None
 
-    final_messsages = []
+    final_messages: list[str] = []
 
     try:
         if native_components:
             workflow_url, resolved_head_sha = resolve_workflow_url(
                 args.release_version, args.workflow_url
             )
+            if not workflow_url:
+                print(f"Error: No release workflow found for version {args.release_version}.")
+                print(
+                    "This can happen on dependency-only PRs. Failing staging so the missing "
+                    "workflow is visible."
+                )
+                print("Native components required:", sorted(native_components))
+                return 1
             vendor_temp_root = Path(tempfile.mkdtemp(prefix="npm-native-", dir=runner_temp))
             install_native_components(workflow_url, native_components, vendor_temp_root)
             vendor_src = vendor_temp_root / "vendor"
@@ -172,12 +201,24 @@ def main() -> int:
                 if not args.keep_staging_dirs:
                     shutil.rmtree(staging_dir, ignore_errors=True)
 
-            final_messsages.append(f"Staged {package} at {pack_output}")
+            if not pack_output.exists():
+                print(
+                    f"Error: Expected staged package at {pack_output} was not produced."
+                )
+                return 1
+
+            final_messages.append(f"Staged {package} at {pack_output}")
     finally:
         if vendor_temp_root is not None and not args.keep_staging_dirs:
             shutil.rmtree(vendor_temp_root, ignore_errors=True)
 
-    for msg in final_messsages:
+    if not final_messages:
+        print(
+            "Error: No npm packages were staged; see logs above for details. Failing staging to keep CI errors visible."
+        )
+        return 1
+
+    for msg in final_messages:
         print(msg)
 
     return 0
