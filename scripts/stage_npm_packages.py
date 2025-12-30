@@ -154,7 +154,7 @@ def main() -> int:
     vendor_src: Path | None = None
     resolved_head_sha: str | None = None
 
-    final_messsages = []
+    final_messages: list[str] = []
 
     try:
         if native_components:
@@ -201,12 +201,24 @@ def main() -> int:
                 if not args.keep_staging_dirs:
                     shutil.rmtree(staging_dir, ignore_errors=True)
 
-            final_messsages.append(f"Staged {package} at {pack_output}")
+            if not pack_output.exists():
+                print(
+                    f"Error: Expected staged package at {pack_output} was not produced."
+                )
+                return 1
+
+            final_messages.append(f"Staged {package} at {pack_output}")
     finally:
         if vendor_temp_root is not None and not args.keep_staging_dirs:
             shutil.rmtree(vendor_temp_root, ignore_errors=True)
 
-    for msg in final_messsages:
+    if not final_messages:
+        print(
+            "Error: No npm packages were staged; see logs above for details. Failing staging to keep CI errors visible."
+        )
+        return 1
+
+    for msg in final_messages:
         print(msg)
 
     return 0
