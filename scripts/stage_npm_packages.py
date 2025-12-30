@@ -162,10 +162,13 @@ def main() -> int:
                 args.release_version, args.workflow_url
             )
             if not workflow_url:
-                print(f"Warning: No release workflow found for version {args.release_version}.")
-                print("This is expected for dependency-only PRs. Skipping npm package staging.")
+                print(f"Error: No release workflow found for version {args.release_version}.")
+                print(
+                    "This can happen on dependency-only PRs. Failing staging so the missing "
+                    "workflow is visible."
+                )
                 print("Native components required:", sorted(native_components))
-                return 0
+                return 1
             vendor_temp_root = Path(tempfile.mkdtemp(prefix="npm-native-", dir=runner_temp))
             install_native_components(workflow_url, native_components, vendor_temp_root)
             vendor_src = vendor_temp_root / "vendor"
