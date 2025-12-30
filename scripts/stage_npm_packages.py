@@ -89,15 +89,19 @@ def resolve_release_workflow(version: str) -> dict | None:
             ],
             cwd=REPO_ROOT,
             text=True,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
         )
-        workflow = json.loads(stdout or "null")
-        if not workflow:
-            return None
-        return workflow
-    except subprocess.CalledProcessError:
-        # gh command failed (e.g., branch doesn't exist)
+    except subprocess.CalledProcessError as exc:
+        error_output = exc.stderr.strip() if exc.stderr else "<no stderr>"
+        raise RuntimeError(
+            "Failed to query release workflow via gh: "
+            f"{error_output} (exit code {exc.returncode})"
+        ) from exc
+
+    workflow = json.loads(stdout or "null")
+    if not workflow:
         return None
+    return workflow
 
 
 def resolve_workflow_url(version: str, override: str | None) -> tuple[str | None, str | None]:
