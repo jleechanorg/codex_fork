@@ -50,8 +50,8 @@ jobs:
           echo "pack_output=$PACK_OUTPUT" >> "$GITHUB_OUTPUT"
 
       - name: Upload staged npm package artifact
-        if: github.repository == 'openai/codex'
         uses: actions/upload-artifact@v5
+        if: github.repository == 'openai/codex'
         with:
           name: codex-npm-staging
           path: ${{ steps.stage_npm_package.outputs.pack_output }}

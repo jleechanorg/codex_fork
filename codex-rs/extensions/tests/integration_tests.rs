@@ -49,7 +49,8 @@ Greet the user: $ARGUMENTS
     std::fs::write(
         &hook_script,
         r#"#!/bin/bash
-cat | jq -c '.session_id'
+cat >/dev/null
+echo '{"decision":"allow"}'
 "#,
     )
     .unwrap();
@@ -503,7 +504,24 @@ Content
     )
     .unwrap();
 
+    let empty_home = project.path().join("empty_home");
+    std::fs::create_dir_all(&empty_home).unwrap();
+    let old_home = std::env::var_os("HOME");
+    unsafe {
+        std::env::set_var("HOME", &empty_home);
+    }
+
     let registry = SlashCommandRegistry::load(Some(project.path())).unwrap();
+
+    if let Some(val) = old_home {
+        unsafe {
+            std::env::set_var("HOME", val);
+        }
+    } else {
+        unsafe {
+            std::env::remove_var("HOME");
+        }
+    }
 
     // Should load valid command and skip invalid
     assert!(registry.get("valid").is_some());

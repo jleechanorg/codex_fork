@@ -18,6 +18,16 @@ In the codex-rs folder where the rust code lives:
 ## Tools
 
 - `gh pr checks <number>` works here; prefer it to check CI status quickly.
+- Git and the GitHub CLI are available in this environment. Do not assume they are blocked; if uncertain, run `git status` or `gh --version` to confirm instead of skipping steps.
+- Always default to using `gh` for PR creation/status and git for pushes when asked to publish changes.
+- If you think a tool might be restricted, verify once with a quick command, then proceed; do not rely on past sandbox assumptions.
+
+## Session startup checklist
+
+- Read this AGENTS.md to refresh current constraints and required tools.
+- Run `git status` to confirm repo state and tool availability.
+- Run `gh --version` (or `gh pr checks <number>` if applicable) to confirm GitHub CLI access.
+- Note any sandbox/network limits communicated in the session and plan commands accordingly.
 
 ## NPM (Codex-Plus)
 
