@@ -167,5 +167,5 @@ The PR is fully CI-compliant based on local reproduction of all required checks.
 ---
 
 **Validated by:** Local CI reproduction
-**Environment:** Linux x86_64, Rust 1.90.0
+**Environment:** Linux x86_64, Rust 1.92.0
 **Validation date:** 2025-11-26
